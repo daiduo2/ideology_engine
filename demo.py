@@ -23,11 +23,12 @@ def main():
     print("=" * 60)
 
     # Load protocol
-    repo = ProtocolRepository(base_path=".")
-    protocol = repo.load("generic_assessment_v1")
+    base_path = Path(__file__).parent.resolve()
+    repo = ProtocolRepository(base_path=base_path)
+    protocol = repo.load("generic-assessment-v1")
 
     if not protocol:
-        print("Error: Could not load generic_assessment_v1 protocol")
+        print("Error: Could not load generic-assessment-v1 protocol")
         print("Make sure you're running from the assessment-engine directory")
         sys.exit(1)
 
