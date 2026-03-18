@@ -1,406 +1,248 @@
-# Assessment Engine
+# Ideology Engine | 意识形态引擎
 
-A protocol-agnostic natural language assessment engine for conducting structured assessments through conversational interfaces.
+自然语言驱动的智能测评引擎，支持 MBTI、DISC 等人格与能力评估协议。
 
-## Overview
+> 基于大语言模型的对话式测评，告别固定问卷，实现真正的个性化评估。
 
-The Assessment Engine provides a framework for conducting systematic assessments using natural language conversations. It supports:
+## 特性
 
-- **Protocol-driven assessments**: Define assessment protocols with dimensions, scales, and stopping rules
-- **State management**: Track assessment state including dimension scores, confidence levels, and coverage
-- **Evidence extraction**: Map conversational evidence to assessment dimensions
-- **Contradiction detection**: Identify and track contradictory evidence
-- **Smart probing**: Automatically determine the next question based on assessment state
-- **Termination checking**: Determine when assessment criteria are met
-- **REST API**: Full HTTP API for integration with external systems
+- 🧠 **智能对话**: 根据用户回答动态生成问题，而非固定问卷
+- ⚡ **并行优化**: 证据提取与问题生成并行执行，响应速度提升 50%+
+- 🎯 **多协议支持**: 内置 MBTI、DISC、沟通风格、领导力等测评协议
+- 🔌 **多模型兼容**: 支持 Anthropic、OpenAI、Kimi 等兼容 OpenAI 协议的 API
+- 💾 **状态持久化**: 会话状态自动保存，支持断点续评
+- 🌐 **REST API**: 完整的 HTTP API，易于集成到现有系统
 
-## Installation
+## 快速开始
+
+### 1. 环境要求
+
+- Python 3.9+
+- 支持 UTF-8 的终端（推荐使用 iTerm2、Tabby 等现代终端）
+
+### 2. 安装
 
 ```bash
+# 克隆仓库
+git clone https://github.com/daiduo2/ideology_engine.git
+cd ideology_engine
+
+# 安装依赖
 pip install -e .
+
+# 安装输入增强（可选，提供更好输入体验）
+pip install prompt_toolkit
 ```
 
-For development:
+### 3. 配置 API Key
+
+**方式一：环境变量（推荐）**
 
 ```bash
-pip install -e ".[dev]"
+export ANTHROPIC_API_KEY="your-api-key"
+export ANTHROPIC_BASE_URL="https://api.anthropic.com"  # 可选，使用第三方API时修改
 ```
 
-## Quick Start
+**方式二：直接修改代码**
 
-### REST API
+编辑 `demo_mbti_optimized.py` 或 `demo_mbti_fast.py`：
 
-Start the API server:
+```python
+# 文件开头修改以下配置
+API_KEY = "your-api-key"
+BASE_URL = "https://api.kimi.com/coding/"  # 使用 Kimi 时
+```
 
+### 4. 运行测评
+
+**优化版（推荐）**
+```bash
+python demo_mbti_optimized.py
+```
+- 合并解析+提取：单次 LLM 调用
+- 预生成问题：零等待获取下一题
+- 智能缓存：相似回答复用结果
+
+**并行版**
+```bash
+python demo_mbti_fast.py
+```
+- 证据提取与问题生成并行执行
+
+**基础版**
+```bash
+python demo_mbti.py
+```
+- 串行处理，适合理解原理
+
+## 支持的 LLM 提供商
+
+| 提供商 | BASE_URL | 说明 |
+|--------|----------|------|
+| Anthropic | `https://api.anthropic.com` | 官方 API |
+| Kimi | `https://api.kimi.com/coding/` | 国内可用 |
+| 其他 OpenAI 兼容 | 自定义 | 如 OpenRouter、LocalAI 等 |
+
+## 项目结构
+
+```
+ideology_engine/
+├── demo_mbti_optimized.py      # 优化版 Demo（推荐）
+├── demo_mbti_fast.py           # 并行处理版
+├── demo_mbti.py                # 基础版
+├── run_api.py                  # REST API 服务端
+├── protocols/                  # 测评协议定义
+│   └── mbti-assessment.json
+├── src/assessment_engine/
+│   ├── core/                   # 核心模型
+│   │   ├── protocol.py         # 协议定义
+│   │   ├── session.py          # 会话管理
+│   │   └── state.py            # 状态管理
+│   ├── engine/                 # 测评引擎
+│   │   ├── optimized_parallel_engine.py  # 优化引擎
+│   │   ├── parallel_engine.py            # 并行引擎
+│   │   ├── state_updater.py              # 状态更新
+│   │   └── probe_planner.py              # 问题规划
+│   ├── llm/                    # LLM 集成
+│   │   ├── config.py           # 配置
+│   │   ├── factory.py          # 客户端工厂
+│   │   └── providers/          # 各厂商实现
+│   └── api/                    # REST API
+├── tests/                      # 测试用例
+└── sessions/                   # 会话存储（自动生成）
+```
+
+## 内置测评协议
+
+### MBTI 人格测评
+```bash
+python demo_mbti_optimized.py
+```
+- 评估四个维度：E/I、S/N、T/F、J/P
+- 8 轮对话，动态问题生成
+- 输出 16 型人格结果及置信度
+
+### 其他协议（通过 REST API）
+
+启动 API 服务：
 ```bash
 python run_api.py
-```
-
-Or with uvicorn directly:
-
-```bash
+# 或
 uvicorn run_api:app --reload
 ```
 
-#### API Endpoints
-
-**Health Check**
+创建 MBTI 测评会话：
 ```bash
-curl http://localhost:8000/health
-```
-
-**List Protocols**
-```bash
-curl http://localhost:8000/protocols
-```
-
-**Create Session**
-```bash
-curl -X POST http://localhost:8000/sessions \
-  -H "Content-Type: application/json" \
-  -d '{"protocol_id": "generic-assessment-v1"}'
-```
-
-**Get Next Question**
-```bash
-curl http://localhost:8000/sessions/{session_id}/next-question
-```
-
-**Submit Answer**
-```bash
-curl -X POST http://localhost:8000/sessions/{session_id}/answers \
-  -H "Content-Type: application/json" \
-  -d '{"answer": "I prefer to work in teams"}'
-```
-
-**Finalize Assessment**
-```bash
-curl -X POST http://localhost:8000/sessions/{session_id}/finalize
-```
-
-**Get Report**
-```bash
-curl http://localhost:8000/sessions/{session_id}/report
-```
-
-### Python API
-
-#### Define a Protocol
-
-```python
-from assessment_engine.core.protocol import AssessmentProtocol, Dimension, Scale, StoppingRules
-
-protocol = AssessmentProtocol(
-    id="communication-assessment",
-    name="Communication Style Assessment",
-    description="Assess communication patterns and preferences",
-    dimensions=[
-        Dimension(
-            id="directness",
-            name="Directness",
-            description="Tendency to communicate directly vs indirectly",
-            scale=Scale(min=0, max=1, default=0.5)
-        ),
-        Dimension(
-            id="empathy",
-            name="Empathy",
-            description="Level of empathetic communication",
-            scale=Scale(min=0, max=1, default=0.5)
-        ),
-    ],
-    coverage_targets=["self_description", "recent_example", "decision_process"],
-    question_strategies=["ask_recent_example", "ask_clarification"],
-    stopping_rules=StoppingRules(
-        min_rounds=6,
-        max_rounds=15,
-        target_confidence=0.72,
-        min_coverage_ratio=0.8
-    ),
-    report_template="default"
-)
-```
-
-### Create an Assessment Session
-
-```python
-from assessment_engine.core.session import AssessmentSession
-
-session = AssessmentSession(
-    session_id="session-001",
-    protocol_id="communication-assessment",
-    status="active"
-)
-```
-
-### Update State with Evidence
-
-```python
-from assessment_engine.core.state import AssessmentState, DimensionState
-from assessment_engine.core.evidence import Evidence, DimensionMapping
-from assessment_engine.engine.state_updater import StateUpdater
-
-# Initialize state
-state = AssessmentState(
-    dimensions={
-        "directness": DimensionState(),
-        "empathy": DimensionState()
-    }
-)
-
-# Create evidence
-evidence = Evidence(
-    id="ev-001",
-    round_index=1,
-    raw_text="I prefer to get straight to the point in meetings",
-    mapped_dimensions=[
-        DimensionMapping(
-            dimension_id="directness",
-            direction=1.0,  # positive direction
-            weight=0.8,
-            confidence=0.9
-        )
-    ],
-    tags=["self_description"]
-)
-
-# Update state
-updater = StateUpdater(learning_rate=0.1)
-new_state = updater.update_state(
-    state=state,
-    new_evidence=[evidence],
-    round_index=1,
-    coverage_targets=protocol.coverage_targets
-)
-```
-
-### Plan Next Question
-
-```python
-from assessment_engine.engine.probe_planner import ProbePlanner
-
-planner = ProbePlanner(protocol)
-next_target = planner.plan_next(
-    state=new_state,
-    coverage_targets=protocol.coverage_targets
-)
-
-print(f"Next target: {next_target.target}")
-print(f"Strategy: {next_target.recommended_strategy}")
-```
-
-### Check Termination
-
-```python
-from assessment_engine.engine.termination_checker import TerminationChecker
-
-checker = TerminationChecker(protocol.stopping_rules)
-status = checker.check(
-    state=new_state,
-    round_index=5,
-    coverage_targets=protocol.coverage_targets
-)
-
-if status.eligible:
-    print("Assessment can be terminated")
-else:
-    print(f"Continue: {status.reasons}")
-```
-
-### Persist Sessions
-
-```python
-from assessment_engine.storage.session_repo import SessionRepository
-from assessment_engine.storage.protocol_repo import ProtocolRepository
-
-# Save/load sessions
-session_repo = SessionRepository(base_path="./sessions")
-session_repo.save(session)
-loaded_session = session_repo.load(session.session_id)
-
-# Save/load protocols
-protocol_repo = ProtocolRepository(base_path=".")
-protocol_repo.save(protocol)
-loaded_protocol = protocol_repo.load(protocol.id)
-```
-
-## Project Structure
-
-```
-assessment-engine/
-├── src/assessment_engine/
-│   ├── core/              # Core data models
-│   │   ├── protocol.py    # Protocol, Dimension, Scale, StoppingRules
-│   │   ├── session.py     # AssessmentSession
-│   │   ├── state.py       # AssessmentState, DimensionState, Coverage
-│   │   ├── evidence.py    # Evidence, DimensionMapping
-│   │   └── contradiction.py # Contradiction
-│   ├── engine/            # Assessment logic
-│   │   ├── state_updater.py    # Update state from evidence
-│   │   ├── probe_planner.py    # Determine next question
-│   │   └── termination_checker.py # Check stopping conditions
-│   ├── storage/           # Persistence layer
-│   │   ├── session_repo.py     # File-based session storage
-│   │   └── protocol_repo.py    # File-based protocol storage
-│   ├── llm/               # LLM integration
-│   │   ├── config.py      # Multi-provider LLM config
-│   │   ├── factory.py     # LLM client factory
-│   │   ├── base.py        # Base LLM client
-│   │   ├── client.py      # Main LLM client
-│   │   ├── providers/     # Provider implementations
-│   │   │   ├── anthropic_client.py
-│   │   │   └── openai_client.py
-│   │   └── prompts/       # LLM prompts
-│   │       ├── extract_evidence.py
-│   │       ├── generate_question.py
-│   │       ├── parse_response.py
-│   │       └── generate_report.py
-│   ├── api/               # REST API
-│   │   ├── app.py         # FastAPI app factory
-│   │   ├── models.py      # Request/response models
-│   │   ├── errors.py      # API error classes
-│   │   └── routes/        # API routes
-│   │       ├── protocols.py
-│   │       └── sessions.py
-│   └── utils/             # Utilities
-├── tests/                 # Test suite
-├── protocols/             # Protocol definitions
-└── sessions/              # Session storage
-```
-
-## Core Concepts
-
-### Protocol
-
-A protocol defines the structure of an assessment:
-
-- **Dimensions**: The traits or characteristics being assessed (e.g., directness, empathy)
-- **Scale**: The measurement scale for each dimension (default: 0-1)
-- **Coverage Targets**: Areas that must be covered during assessment
-- **Question Strategies**: Approaches for generating questions
-- **Stopping Rules**: Criteria for when to end the assessment
-
-### State
-
-Assessment state tracks progress:
-
-- **Dimensions**: Current scores and confidence levels for each dimension
-- **Coverage**: Which coverage targets have been addressed
-- **Evidence IDs**: References to collected evidence
-- **Contradiction IDs**: References to detected contradictions
-- **Open Questions**: Areas needing clarification
-
-### Evidence
-
-Evidence represents extracted information from conversations:
-
-- **Raw Text**: The original conversational text
-- **Mapped Dimensions**: How the evidence relates to assessment dimensions
-- **Direction**: Whether evidence supports (+1) or contradicts (-1) a dimension
-- **Weight**: The strength of the evidence (0-1)
-- **Confidence**: Reliability of the evidence (0-1)
-
-### Contradiction
-
-Contradictions track conflicting evidence:
-
-- **Severity**: low, medium, or high
-- **Related Dimensions**: Which dimensions are affected
-- **Needs Followup**: Whether the contradiction requires clarification
-
-## Preset Protocol Templates
-
-The Assessment Engine includes several pre-built protocol templates for common assessments:
-
-### MBTI Assessment (`mbti-assessment`)
-
-Assesses personality preferences across four dichotomies based on the Myers-Briggs Type Indicator framework:
-
-- **Extraversion vs Introversion**: Energy source preference (scale: -1 to +1)
-- **Sensing vs Intuition**: Information gathering preference (scale: -1 to +1)
-- **Thinking vs Feeling**: Decision making preference (scale: -1 to +1)
-- **Judging vs Perceiving**: Lifestyle approach preference (scale: -1 to +1)
-
-**Coverage targets**: self_description, work_scenario, social_interaction, decision_making
-
-### DISC Assessment (`disc-assessment`)
-
-Evaluates behavioral preferences across four dimensions:
-
-- **Dominance**: Control and assertiveness (scale: 0 to 1)
-- **Influence**: Social interaction and persuasion (scale: 0 to 1)
-- **Steadiness**: Patience and consistency (scale: 0 to 1)
-- **Conscientiousness**: Accuracy and quality focus (scale: 0 to 1)
-
-**Coverage targets**: work_pressure, team_collaboration, change_adaptation, rule_following
-
-### Communication Style (`communication-style`)
-
-Assesses communication preferences across three key dimensions:
-
-- **Directness**: Straightforward vs nuanced messaging (scale: 0 to 1)
-- **Empathy**: Emotional awareness and consideration (scale: 0 to 1)
-- **Assertiveness**: Confidence in expressing needs (scale: 0 to 1)
-
-**Coverage targets**: feedback_giving, conflict_handling, active_listening, clarity_expression
-
-### Leadership Style (`leadership-style`)
-
-Evaluates leadership approach across three complementary styles:
-
-- **Visionary**: Inspiring and strategic direction-setting (scale: 0 to 1)
-- **Coaching**: Developing individuals through guidance (scale: 0 to 1)
-- **Commanding**: Directing with clear authority (scale: 0 to 1)
-
-**Coverage targets**: team_motivation, delegation, crisis_management, development_focus
-
-### Using Preset Protocols
-
-```bash
-# Create session with MBTI protocol
 curl -X POST http://localhost:8000/sessions \
   -H "Content-Type: application/json" \
   -d '{"protocol_id": "mbti-assessment"}'
 ```
 
-All preset protocols use the same stopping rules:
-- Minimum 6 rounds, maximum 15 rounds
-- Target confidence: 0.72
-- Minimum coverage ratio: 0.8
+获取下一题：
+```bash
+curl http://localhost:8000/sessions/{session_id}/next-question
+```
 
-## Testing
+提交回答：
+```bash
+curl -X POST http://localhost:8000/sessions/{session_id}/answers \
+  -H "Content-Type: application/json" \
+  -d '{"answer": "我喜欢和朋友们一起度过周末"}'
+```
 
-Run the test suite:
+生成报告：
+```bash
+curl http://localhost:8000/sessions/{session_id}/report
+```
 
+## 常见问题
+
+### 1. 响应速度慢
+
+**现象**: 每轮需要 10-30 秒
+
+**原因**: LLM API 响应慢（特别是复杂解析任务）
+
+**优化**:
+- 使用 `demo_mbti_optimized.py`（已合并调用）
+- 考虑使用更快的模型（如 claude-3-5-sonnet 代替 opus）
+- 启用缓存（相同回答自动复用）
+
+### 2. 输入中文乱码
+
+**现象**: 输入中文显示为乱码或报错
+
+**解决**:
+- 确保终端编码为 UTF-8
+- macOS/Linux: `export LANG=en_US.UTF-8`
+- 安装 `prompt_toolkit` 获得最佳体验
+
+### 3. API 连接失败
+
+**现象**: "连接失败" 或超时
+
+**检查**:
+- API Key 是否正确设置
+- BASE_URL 是否正确（注意末尾斜杠）
+- 网络是否能访问该 API
+
+### 4. 并发限制
+
+**现象**: 后台证据处理等待很久
+
+**说明**: 这是预期行为。引擎在等待你的输入期间并行处理证据，
+如果你输入很快，就会看到"等待后台证据处理"的提示。
+
+## 开发
+
+### 运行测试
 ```bash
 python -m pytest tests/ -v
 ```
 
-Run specific test modules:
+### 添加新测评协议
 
-```bash
-python -m pytest tests/core/ -v
-python -m pytest tests/engine/ -v
-python -m pytest tests/storage/ -v
+1. 在 `protocols/` 目录创建 JSON 文件
+2. 参考 `protocols/mbti-assessment.json` 格式
+3. 定义维度、量表、覆盖目标、停止规则
+
+## 技术架构
+
+```
+┌─────────────────────────────────────────┐
+│              用户界面层                  │
+│    (demo / REST API / Web Frontend)     │
+└──────────────────┬──────────────────────┘
+                   │
+┌──────────────────▼──────────────────────┐
+│              引擎层                      │
+│  ┌──────────────┐    ┌──────────────┐  │
+│  │ 问题规划器    │    │ 状态更新器    │  │
+│  │ProbePlanner  │    │StateUpdater  │  │
+│  └──────────────┘    └──────────────┘  │
+│  ┌──────────────────────────────────┐  │
+│  │    并行执行器 (Parallel Engine)   │  │
+│  │  ┌──────────┐    ┌──────────┐   │  │
+│  │  │证据提取  │◄──►│问题生成  │   │  │
+│  │  │(后台)    │    │(即时)    │   │  │
+│  │  └──────────┘    └──────────┘   │  │
+│  └──────────────────────────────────┘  │
+└──────────────────┬──────────────────────┘
+                   │
+┌──────────────────▼──────────────────────┐
+│              LLM 适配层                  │
+│    (Anthropic / OpenAI / Kimi ...)      │
+└─────────────────────────────────────────┘
 ```
 
-## Architecture
+## 贡献
 
-The Assessment Engine follows a layered architecture:
+欢迎提交 Issue 和 PR！
 
-1. **Core Layer**: Pydantic models for data validation and serialization
-2. **Engine Layer**: Pure functions for state updates, planning, and termination
-3. **Storage Layer**: File-based repositories for persistence
-4. **LLM Layer**: Integration with language models for natural language processing
-5. **API Layer**: FastAPI REST endpoints for external integration
-
-### Design Principles
-
-- **Immutability**: State updates return new state objects
-- **Pure Functions**: Engine logic has no side effects
-- **Type Safety**: Full type hints and Pydantic validation
-- **Testability**: Comprehensive test coverage (80%+)
-- **Extensibility**: Protocol-agnostic design
-
-## License
+## 许可
 
 MIT License
+
+---
+
+> 本项目仅供学习和研究使用。测评结果仅供参考，不构成专业心理诊断。
