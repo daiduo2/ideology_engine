@@ -1,12 +1,14 @@
 config:
-  MD013: false
-  MD031: false
-  MD040: false
-  MD046: false
-  MD060: false
+  MD013: false  # line-length
+  MD031: false  # blanks-around-fences
+  MD032: false  # blanks-around-lists - allow lists without blank lines
+  MD034: false  # no-bare-urls - allow bare URLs
+  MD036: false  # no-emphasis-as-heading - allow bold as heading style
+  MD040: false  # fenced-code-language
+  MD046: false  # code-block-style
+  MD060: false  # html-elements
 
 globs:
-  - README.md
-  - AGENTS.md
-  - .github/FLYWHEEL.md
-  - docs/**/*.md
+  - "*.md"
+  - ".github/**/*.md"
+  - "docs/**/*.md"

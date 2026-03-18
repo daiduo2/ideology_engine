@@ -42,12 +42,13 @@ gh workflow run automation-metrics.yml
 | Secret | 说明 | 获取方式 |
 |--------|------|---------|
 | `ANTHROPIC_AUTH_TOKEN` | Claude API 密钥 | [Anthropic Console](https://console.anthropic.com/) |
-| `ANTHROPIC_BASE_URL` | API 基础 URL (可选) | 默认: https://api.anthropic.com |
+| `ANTHROPIC_BASE_URL` | API 基础 URL (可选) | 默认: <https://api.anthropic.com> |
 | `ANTHROPIC_MODEL` | 使用的模型 (可选) | 如: claude-opus-4-6 |
 
 ### 2. 配置仓库保护规则
 
 Settings → Branches → Add rule:
+
 - Branch name pattern: `master`
 - ✅ Require a pull request before merging
 - ✅ Require status checks to pass before merging

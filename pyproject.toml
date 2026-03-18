@@ -2,7 +2,7 @@
 name = "assessment-engine"
 version = "0.1.0"
 description = "A protocol-agnostic natural language assessment engine powered by Flywheel automation"
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 dependencies = [
     "anthropic>=0.84.0",
     "pydantic>=2.0.0",
