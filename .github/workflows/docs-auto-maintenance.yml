@@ -29,7 +29,8 @@ jobs:
         github.event.workflow_run.head_branch == 'master' &&
         github.event.workflow_run.head_repository.full_name == github.repository
       )
-    runs-on: ubuntu-latest
+    # Requires claude-agent-sdk which is only available on macOS
+    runs-on: macos-latest
     timeout-minutes: 45
     steps:
       - name: Resolve target ref
@@ -55,8 +56,8 @@ jobs:
           python-version: "3.13"
           enable-cache: true
 
-      - name: Install dependencies
-        run: uv sync
+      - name: Install dependencies (with flywheel)
+        run: uv sync --extra flywheel
 
       - name: Run docs maintenance via Agent SDK script
         env:

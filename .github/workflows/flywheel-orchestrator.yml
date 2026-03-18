@@ -86,7 +86,7 @@ concurrency:
 
 jobs:
   circuit-breaker:
-    runs-on: ubuntu-latest
+    runs-on: macos-latest
     outputs:
       should_run: ${{ steps.gate.outputs.should_run }}
       reason: ${{ steps.gate.outputs.reason }}
@@ -108,7 +108,7 @@ jobs:
   scan:
     needs: circuit-breaker
     if: needs.circuit-breaker.outputs.should_run == 'true'
-    runs-on: ubuntu-latest
+    runs-on: macos-latest
     timeout-minutes: 30
     steps:
       - name: Checkout code
@@ -121,7 +121,7 @@ jobs:
           enable-cache: true
 
       - name: Install dependencies
-        run: uv sync
+        run: uv sync --extra flywheel
 
       - name: Run scan via SDK
         env:
@@ -194,7 +194,7 @@ jobs:
   evaluate:
     needs: [circuit-breaker, scan]
     if: needs.circuit-breaker.outputs.should_run == 'true' && needs.scan.result == 'success'
-    runs-on: ubuntu-latest
+    runs-on: macos-latest
     timeout-minutes: 20
     steps:
       - name: Checkout code
@@ -207,7 +207,7 @@ jobs:
           enable-cache: true
 
       - name: Install dependencies
-        run: uv sync
+        run: uv sync --extra flywheel
 
       - name: Re-evaluate priorities via SDK
         env:
@@ -228,7 +228,7 @@ jobs:
   select-issue:
     needs: [circuit-breaker, evaluate]
     if: needs.circuit-breaker.outputs.should_run == 'true' && needs.evaluate.result == 'success'
-    runs-on: ubuntu-latest
+    runs-on: macos-latest
     outputs:
       should_run: ${{ steps.pick.outputs.should_run }}
       issue_number: ${{ steps.pick.outputs.issue_number }}
@@ -252,7 +252,7 @@ jobs:
   generate-candidates:
     needs: [circuit-breaker, select-issue]
     if: needs.circuit-breaker.outputs.should_run == 'true' && needs.select-issue.outputs.should_run == 'true'
-    runs-on: ubuntu-latest
+    runs-on: macos-latest
     timeout-minutes: 60
     strategy:
       fail-fast: false
@@ -272,7 +272,7 @@ jobs:
           enable-cache: true
 
       - name: Install dependencies
-        run: uv sync
+        run: uv sync --extra flywheel
 
       - name: Generate candidate PR via SDK
         env:
@@ -411,7 +411,7 @@ jobs:
   merge:
     needs: [circuit-breaker, select-issue, generate-candidates]
     if: always() && needs.circuit-breaker.outputs.should_run == 'true' && needs.select-issue.outputs.should_run == 'true'
-    runs-on: ubuntu-latest
+    runs-on: macos-latest
     timeout-minutes: 45
     strategy:
       fail-fast: false
@@ -430,7 +430,7 @@ jobs:
           enable-cache: true
 
       - name: Install dependencies
-        run: uv sync
+        run: uv sync --extra flywheel
 
       - name: Resolve merge-eligible candidates for this run
         id: eligible
@@ -517,7 +517,7 @@ jobs:
   curation:
     needs: [circuit-breaker, merge]
     if: always() && needs.circuit-breaker.outputs.should_run == 'true'
-    runs-on: ubuntu-latest
+    runs-on: macos-latest
     timeout-minutes: 20
     steps:
       - name: Checkout repository
@@ -530,7 +530,7 @@ jobs:
           enable-cache: true
 
       - name: Install dependencies
-        run: uv sync
+        run: uv sync --extra flywheel
 
       - name: Curate issue pool via SDK
         env:
@@ -552,7 +552,7 @@ jobs:
   summary:
     needs: [circuit-breaker, scan, evaluate, select-issue, generate-candidates, merge, curation]
     if: always()
-    runs-on: ubuntu-latest
+    runs-on: macos-latest
     steps:
       - name: Pipeline summary
         run: |

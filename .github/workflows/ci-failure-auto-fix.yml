@@ -36,7 +36,7 @@ concurrency:
 
 jobs:
   circuit-breaker:
-    runs-on: ubuntu-latest
+    runs-on: macos-latest
     outputs:
       should_run: ${{ steps.gate.outputs.should_run }}
       reason: ${{ steps.gate.outputs.reason }}
@@ -58,7 +58,7 @@ jobs:
   select-target:
     needs: circuit-breaker
     if: needs.circuit-breaker.outputs.should_run == 'true'
-    runs-on: ubuntu-latest
+    runs-on: macos-latest
     outputs:
       should_run: ${{ steps.pick.outputs.should_run }}
       pr_number: ${{ steps.pick.outputs.pr_number }}
@@ -97,7 +97,7 @@ jobs:
   autofix:
     needs: [circuit-breaker, select-target]
     if: needs.select-target.outputs.should_run == 'true'
-    runs-on: ubuntu-latest
+    runs-on: macos-latest
     timeout-minutes: 45
     steps:
       - name: Checkout PR branch
@@ -113,7 +113,7 @@ jobs:
           enable-cache: true
 
       - name: Install dependencies
-        run: uv sync
+        run: uv sync --extra flywheel
 
       - name: Collect failed job summaries
         id: failure
