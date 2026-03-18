@@ -25,7 +25,7 @@ jobs:
           enable-cache: true
 
       - name: Install dependencies
-        run: uv sync --no-extra flywheel
+        run: uv sync --extra dev --no-extra flywheel
 
       - name: Verify generated workflow input docs are synced
         run: uv run python scripts/check_docs_sync.py --check
