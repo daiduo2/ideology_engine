@@ -1,0 +1,183 @@
+name: CI Failure Auto Fix
+
+on:
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: "Specific PR number to auto-fix"
+        required: true
+        type: string
+      circuit_failure_threshold:
+        description: "Circuit breaker consecutive failure threshold"
+        required: false
+        default: "3"
+        type: string
+      circuit_cooldown_minutes:
+        description: "Circuit breaker cooldown window (minutes)"
+        required: false
+        default: "90"
+        type: string
+      debug_logs:
+        description: "Enable verbose SDK logs for troubleshooting"
+        required: false
+        default: "false"
+        type: boolean
+
+permissions:
+  contents: write
+  pull-requests: write
+  actions: read
+  issues: write
+  id-token: write
+
+concurrency:
+  group: ci-failure-auto-fix
+  cancel-in-progress: false
+
+jobs:
+  circuit-breaker:
+    runs-on: ubuntu-latest
+    outputs:
+      should_run: ${{ steps.gate.outputs.should_run }}
+      reason: ${{ steps.gate.outputs.reason }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Circuit breaker gate
+        id: gate
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          FAILURE_THRESHOLD: ${{ inputs.circuit_failure_threshold || '3' }}
+          COOLDOWN_MINUTES: ${{ inputs.circuit_cooldown_minutes || '90' }}
+        run: |
+          python scripts/shared/circuit_breaker.py \
+            --failure-threshold "$FAILURE_THRESHOLD" \
+            --cooldown-minutes "$COOLDOWN_MINUTES"
+
+  select-target:
+    needs: circuit-breaker
+    if: needs.circuit-breaker.outputs.should_run == 'true'
+    runs-on: ubuntu-latest
+    outputs:
+      should_run: ${{ steps.pick.outputs.should_run }}
+      pr_number: ${{ steps.pick.outputs.pr_number }}
+      head_branch: ${{ steps.pick.outputs.head_branch }}
+      run_id: ${{ steps.pick.outputs.run_id }}
+      run_url: ${{ steps.pick.outputs.run_url }}
+    steps:
+      - name: Pick failed CI target
+        id: pick
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          INPUT_PR: ${{ inputs.pr_number }}
+          GH_PAGER: cat
+          PAGER: cat
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          pr_json="$(gh pr view "$INPUT_PR" --json number,headRefName,url)"
+          pr_number="$(echo "$pr_json" | jq -r '.number')"
+          head_branch="$(echo "$pr_json" | jq -r '.headRefName')"
+          run_url="$(echo "$pr_json" | jq -r '.url')"
+
+          if [[ "$head_branch" == claude/* ]] || [[ "$head_branch" == *"candidate"* ]]; then
+            echo "Skip auto-fixing candidate/claude branch to avoid loops."
+            echo "should_run=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "should_run=true" >> "$GITHUB_OUTPUT"
+          echo "pr_number=$pr_number" >> "$GITHUB_OUTPUT"
+          echo "head_branch=$head_branch" >> "$GITHUB_OUTPUT"
+          echo "run_id=manual" >> "$GITHUB_OUTPUT"
+          echo "run_url=$run_url" >> "$GITHUB_OUTPUT"
+
+  autofix:
+    needs: [circuit-breaker, select-target]
+    if: needs.select-target.outputs.should_run == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout PR branch
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.select-target.outputs.head_branch }}
+          fetch-depth: 0
+
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          python-version: "3.13"
+          enable-cache: true
+
+      - name: Install dependencies
+        run: uv sync
+
+      - name: Collect failed job summaries
+        id: failure
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TARGET_RUN_ID: ${{ needs.select-target.outputs.run_id }}
+          GH_PAGER: cat
+          PAGER: cat
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [ "$TARGET_RUN_ID" = "manual" ]; then
+            echo "failure_summary=Manual mode: no workflow_run logs provided." >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          jobs_json="$(gh api repos/${{ github.repository }}/actions/runs/$TARGET_RUN_ID/jobs)"
+          summary="$(echo "$jobs_json" | jq -r '
+            .jobs
+            | map(select(.conclusion == "failure"))
+            | map("- " + .name + " (" + (.html_url // "") + ")")
+            | if length == 0 then "- No failed jobs found" else .[] end
+          ')"
+
+          {
+            echo "failure_summary<<EOF"
+            echo "$summary"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Generate CI-fix candidate PR via SDK
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ANTHROPIC_AUTH_TOKEN: ${{ secrets.ANTHROPIC_AUTH_TOKEN }}
+          ANTHROPIC_BASE_URL: ${{ secrets.ANTHROPIC_BASE_URL }}
+          ANTHROPIC_MODEL: ${{ secrets.ANTHROPIC_MODEL }}
+          TARGET_PR_NUMBER: ${{ needs.select-target.outputs.pr_number }}
+          TARGET_HEAD_BRANCH: ${{ needs.select-target.outputs.head_branch }}
+          TARGET_RUN_ID: ${{ needs.select-target.outputs.run_id }}
+          TARGET_RUN_URL: ${{ needs.select-target.outputs.run_url }}
+          FAILURE_SUMMARY: ${{ steps.failure.outputs.failure_summary }}
+          RUN_ID: ${{ github.run_id }}
+          CLAUDE_MAX_TURNS: "20"
+          CLAUDE_BACKEND: agent_sdk
+          LOG_LEVEL: ${{ inputs.debug_logs && 'DEBUG' || 'INFO' }}
+          CLAUDE_SDK_TRACE: "1"
+          CLAUDE_SDK_VERBOSE_EVENTS: ${{ inputs.debug_logs && '1' || '0' }}
+          CLAUDE_SDK_LOG_PROMPT: ${{ inputs.debug_logs && '1' || '0' }}
+          CLAUDE_SDK_HEARTBEAT_SECONDS: ${{ inputs.debug_logs && '10' || '30' }}
+          CLAUDE_SDK_IDLE_TIMEOUT_SECONDS: "240"
+        run: timeout 25m uv run python scripts/ci_failure_fix.py
+
+      - name: Summary
+        if: always()
+        env:
+          CB_REASON: ${{ needs.circuit-breaker.outputs.reason }}
+          PR_NUMBER: ${{ needs.select-target.outputs.pr_number }}
+          HEAD_BRANCH: ${{ needs.select-target.outputs.head_branch }}
+          RUN_URL: ${{ needs.select-target.outputs.run_url }}
+        run: |
+          echo "### CI Failure Auto Fix" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Circuit breaker: ${CB_REASON}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- PR: #${PR_NUMBER}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Branch: ${HEAD_BRANCH}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Run URL: ${RUN_URL}" >> "$GITHUB_STEP_SUMMARY"

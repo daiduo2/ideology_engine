@@ -1,0 +1,360 @@
+name: Automation Metrics Dashboard
+
+on:
+  schedule:
+    # Daily report at 3 AM UTC
+    - cron: "0 3 * * *"
+  workflow_dispatch:
+    inputs:
+      window_days:
+        description: "Lookback window (days)"
+        required: false
+        default: "7"
+        type: string
+
+permissions:
+  contents: read
+  issues: write
+  discussions: write
+  pull-requests: read
+  actions: read
+
+concurrency:
+  group: automation-metrics
+  cancel-in-progress: true
+
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          python-version: "3.13"
+          enable-cache: true
+
+      - name: Install dependencies
+        run: uv sync
+
+      - name: Build metrics snapshot
+        id: metrics
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          WINDOW_DAYS: ${{ inputs.window_days || '7' }}
+          GH_PAGER: cat
+          PAGER: cat
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          cutoff="$(date -u -d "${WINDOW_DAYS} days ago" +%Y-%m-%d)"
+          now_utc="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          today_utc="$(date -u +%Y-%m-%d)"
+          max_issue_cap=20
+
+          open_issues="$(gh issue list --state open --limit 200 --json number | jq 'length')"
+
+          priority_json="$(gh issue list --state open --limit 200 --json labels)"
+          p0="$(echo "$priority_json" | jq '[.[] | [.labels[].name] | any(. == "p0")] | map(select(.)) | length')"
+          p1="$(echo "$priority_json" | jq '[.[] | [.labels[].name] | any(. == "p1")] | map(select(.)) | length')"
+          p2="$(echo "$priority_json" | jq '[.[] | [.labels[].name] | any(. == "p2")] | map(select(.)) | length')"
+          p3="$(echo "$priority_json" | jq '[.[] | [.labels[].name] | any(. == "p3")] | map(select(.)) | length')"
+
+          open_candidate_prs="$(
+            gh pr list --state open --limit 200 --json title \
+              | jq '[.[] | select(.title | test("^\\[AUTOFIX\\]\\[ISSUE-[0-9]+\\]\\[CANDIDATE-[0-9]+\\]"))] | length'
+          )"
+
+          merged_recent="$(
+            gh pr list --state merged --search "[AUTOFIX] merged:>=$cutoff" --limit 200 --json number \
+              | jq 'length'
+          )"
+
+          closed_unmerged_recent="$(
+            gh pr list --state closed --search "[AUTOFIX] is:unmerged closed:>=$cutoff" --limit 200 --json number \
+              | jq 'length'
+          )"
+
+          ci_runs_json="$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/ci.yml/runs?per_page=100")"
+          ci_recent_total="$(
+            echo "$ci_runs_json" | jq --arg cutoff "${cutoff}T00:00:00Z" '
+              [.workflow_runs[] | select(.created_at >= $cutoff)] | length
+            '
+          )"
+          ci_recent_failed="$(
+            echo "$ci_runs_json" | jq --arg cutoff "${cutoff}T00:00:00Z" '
+              [.workflow_runs[] | select(.created_at >= $cutoff and .conclusion == "failure")] | length
+            '
+          )"
+
+          if [ "$ci_recent_total" -gt 0 ]; then
+            ci_fail_rate="$(awk "BEGIN { printf \"%.2f\", ($ci_recent_failed/$ci_recent_total)*100 }")"
+          else
+            ci_fail_rate="0.00"
+          fi
+
+          health="OK"
+          alerts=""
+          if [ "$open_issues" -gt "$max_issue_cap" ]; then
+            health="WARN"
+            alerts="${alerts}\n- Open Issue 超过上限（${open_issues}/${max_issue_cap}）。"
+          fi
+          ci_fail_rate_int="$(printf '%.0f' "$ci_fail_rate")"
+          if [ "$ci_fail_rate_int" -ge 30 ]; then
+            health="WARN"
+            alerts="${alerts}\n- CI 失败率偏高（${ci_fail_rate}%）。"
+          fi
+          if [ "$open_candidate_prs" -ge 8 ]; then
+            health="WARN"
+            alerts="${alerts}\n- 候选 PR 积压偏高（${open_candidate_prs}）。"
+          fi
+          if [ "$merged_recent" -eq 0 ] && [ "$open_issues" -gt 0 ]; then
+            health="WARN"
+            alerts="${alerts}\n- 当前窗口内没有 AUTOFIX PR 合并。"
+          fi
+
+          if [ -z "${alerts}" ]; then
+            alerts="- 无"
+          else
+            alerts="$(echo -e "$alerts" | sed '/^$/d')"
+          fi
+
+          metrics_json="$(
+            jq -cn \
+              --arg now_utc "$now_utc" \
+              --arg cutoff_date "$cutoff" \
+              --argjson window_days "$WINDOW_DAYS" \
+              --argjson max_issue_cap "$max_issue_cap" \
+              --argjson open_issues "$open_issues" \
+              --argjson p0 "$p0" \
+              --argjson p1 "$p1" \
+              --argjson p2 "$p2" \
+              --argjson p3 "$p3" \
+              --argjson open_candidate_prs "$open_candidate_prs" \
+              --argjson merged_recent "$merged_recent" \
+              --argjson closed_unmerged_recent "$closed_unmerged_recent" \
+              --argjson ci_recent_total "$ci_recent_total" \
+              --argjson ci_recent_failed "$ci_recent_failed" \
+              --arg ci_fail_rate "$ci_fail_rate" \
+              '{
+                window_days: $window_days,
+                now_utc: $now_utc,
+                cutoff_date: $cutoff_date,
+                max_issue_cap: $max_issue_cap,
+                open_issues: $open_issues,
+                p0: $p0, p1: $p1, p2: $p2, p3: $p3,
+                open_candidate_prs: $open_candidate_prs,
+                merged_recent: $merged_recent,
+                closed_unmerged_recent: $closed_unmerged_recent,
+                ci_recent_total: $ci_recent_total,
+                ci_recent_failed: $ci_recent_failed,
+                ci_fail_rate: ($ci_fail_rate | tonumber)
+              }'
+          )"
+
+          facts_md="$(
+            cat <<EOF
+          ### 指标快照
+          - 基线状态: **${health}**
+          - 生成时间: \`${now_utc}\`
+          - 统计窗口: \`${WINDOW_DAYS}d\`（起始 \`${cutoff}\`）
+
+          | 指标 | 数值 |
+          |---|---:|
+          | Open Issue 数 | ${open_issues} |
+          | 优先级分布 | p0=${p0}, p1=${p1}, p2=${p2}, p3=${p3} |
+          | 候选 PR（进行中） | ${open_candidate_prs} |
+          | 已合并 AUTOFIX PR（${WINDOW_DAYS}d） | ${merged_recent} |
+          | 已关闭未合并 AUTOFIX PR（${WINDOW_DAYS}d） | ${closed_unmerged_recent} |
+          | CI 运行次数（${WINDOW_DAYS}d） | ${ci_recent_total} |
+          | CI 失败次数（${WINDOW_DAYS}d） | ${ci_recent_failed} |
+          | CI 失败率 | ${ci_fail_rate}% |
+          EOF
+          )"
+
+          {
+            echo "today_utc=$today_utc"
+            echo "metrics_json<<EOF"
+            echo "$metrics_json"
+            echo "EOF"
+            echo "facts_md<<EOF"
+            echo "$facts_md"
+            echo "EOF"
+            echo "alerts_md<<EOF"
+            echo "### 告警"
+            echo "$alerts"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Analyze metrics via SDK (with rule fallback)
+        id: analysis
+        env:
+          METRICS_JSON: ${{ steps.metrics.outputs.metrics_json }}
+          ANTHROPIC_AUTH_TOKEN: ${{ secrets.ANTHROPIC_AUTH_TOKEN }}
+          ANTHROPIC_BASE_URL: ${{ secrets.ANTHROPIC_BASE_URL }}
+          ANTHROPIC_MODEL: ${{ secrets.ANTHROPIC_MODEL }}
+          CLAUDE_SDK_TRACE: "1"
+          CLAUDE_METRICS_MAX_TURNS: "8"
+        run: uv run python scripts/analyze_metrics.py
+
+      - name: Compose final report
+        id: compose
+        env:
+          TODAY_UTC: ${{ steps.metrics.outputs.today_utc }}
+          ANALYSIS_MD: ${{ steps.analysis.outputs.analysis_md }}
+          FACTS_MD: ${{ steps.metrics.outputs.facts_md }}
+          ALERTS_MD: ${{ steps.metrics.outputs.alerts_md }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          report="$(
+            cat <<EOF
+          ## 飞轮每日报告 - ${TODAY_UTC}
+
+          ${ANALYSIS_MD}
+
+          ${FACTS_MD}
+
+          ${ALERTS_MD}
+          EOF
+          )"
+
+          {
+            echo "report<<EOF"
+            echo "$report"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Upsert 中文 dashboard discussion
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          REPORT: ${{ steps.compose.outputs.report }}
+          GH_PAGER: cat
+          PAGER: cat
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          owner="${GH_REPO%/*}"
+          repo="${GH_REPO#*/}"
+          title="[飞轮] 自动化健康每日报告"
+          fallback_issue_title="[指标] 自动化健康看板"
+
+          post_issue_fallback() {
+            issue_number="$(
+              gh issue list --state open --search "in:title \"$fallback_issue_title\"" --limit 20 --json number,title \
+                | jq -r --arg title "$fallback_issue_title" '.[] | select(.title == $title) | .number' \
+                | head -n 1
+            )"
+            if [ -z "${issue_number:-}" ]; then
+              gh issue create \
+                --title "$fallback_issue_title" \
+                --body "该 Issue 用于在 Discussion 不可用时，回退发布飞轮自动化指标快照。" \
+                >/tmp/new_issue_url.txt
+              issue_number="$(awk -F'/' '{print $NF}' /tmp/new_issue_url.txt)"
+            fi
+            gh issue comment "$issue_number" --body "$REPORT"
+          }
+
+          repo_data="$(
+            gh api graphql \
+              -f owner="$owner" \
+              -f name="$repo" \
+              -f query='
+                query($owner:String!, $name:String!) {
+                  repository(owner:$owner, name:$name) {
+                    id
+                    discussionCategories(first:25) {
+                      nodes { id slug name }
+                    }
+                    discussions(first:100, orderBy:{field:UPDATED_AT,direction:DESC}) {
+                      nodes { id title number }
+                    }
+                  }
+                }
+              '
+          )"
+
+          repo_id="$(echo "$repo_data" | jq -r '.data.repository.id // empty')"
+          if [ -z "$repo_id" ]; then
+            echo "Discussion 元数据不可用，回退到指标 Issue。"
+            post_issue_fallback
+            exit 0
+          fi
+
+          category_id="$(
+            echo "$repo_data" | jq -r '
+              .data.repository.discussionCategories.nodes
+              | map(select((.slug == "announcements") or (.slug == "general")))
+              | .[0].id // empty
+            '
+          )"
+          if [ -z "$category_id" ]; then
+            category_id="$(echo "$repo_data" | jq -r '.data.repository.discussionCategories.nodes[0].id // empty')"
+          fi
+          if [ -z "$category_id" ]; then
+            echo "未找到可用 Discussion 分类，回退到指标 Issue。"
+            post_issue_fallback
+            exit 0
+          fi
+
+          discussion_id="$(
+            echo "$repo_data" \
+              | jq -r --arg title "$title" '.data.repository.discussions.nodes[] | select(.title == $title) | .id' \
+              | head -n 1
+          )"
+
+          if [ -z "${discussion_id:-}" ]; then
+            created="$(
+              gh api graphql \
+                -f repo_id="$repo_id" \
+                -f category_id="$category_id" \
+                -f title="$title" \
+                -f body="飞轮自动化每日健康报告会由工作流定时追加在本讨论串评论中。" \
+                -f query='
+                  mutation($repo_id:ID!, $category_id:ID!, $title:String!, $body:String!) {
+                    createDiscussion(input:{
+                      repositoryId:$repo_id,
+                      categoryId:$category_id,
+                      title:$title,
+                      body:$body
+                    }) {
+                      discussion { id number }
+                    }
+                  }
+                '
+            )"
+            discussion_id="$(echo "$created" | jq -r '.data.createDiscussion.discussion.id // empty')"
+          fi
+
+          if [ -z "${discussion_id:-}" ]; then
+            echo "无法创建或定位讨论串，回退到指标 Issue。"
+            post_issue_fallback
+            exit 0
+          fi
+
+          gh api graphql \
+            -f discussion_id="$discussion_id" \
+            -f body="$REPORT" \
+            -f query='
+              mutation($discussion_id:ID!, $body:String!) {
+                addDiscussionComment(input:{
+                  discussionId:$discussion_id,
+                  body:$body
+                }) {
+                  comment { id }
+                }
+              }
+            ' >/dev/null
+
+      - name: Summary
+        run: |
+          echo "### 自动化指标看板" >> "$GITHUB_STEP_SUMMARY"
+          echo "${{ steps.compose.outputs.report }}" >> "$GITHUB_STEP_SUMMARY"
