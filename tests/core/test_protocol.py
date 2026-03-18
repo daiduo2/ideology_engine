@@ -20,9 +20,16 @@ class TestScale:
         assert scale.max == 0.8
         assert scale.default == 0.5
 
-    def test_validation_min_ge_zero(self):
+    def test_validation_min_ge_negative_one(self):
         with pytest.raises(ValueError):
-            Scale(min=-0.1)
+            Scale(min=-1.1)
+
+    def test_negative_scale_supported(self):
+        """Test that negative scale values are supported for MBTI-style assessments."""
+        scale = Scale(min=-1.0, max=1.0, default=0.0)
+        assert scale.min == -1.0
+        assert scale.max == 1.0
+        assert scale.default == 0.0
 
     def test_validation_max_le_one(self):
         with pytest.raises(ValueError):

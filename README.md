@@ -12,6 +12,7 @@ The Assessment Engine provides a framework for conducting systematic assessments
 - **Contradiction detection**: Identify and track contradictory evidence
 - **Smart probing**: Automatically determine the next question based on assessment state
 - **Termination checking**: Determine when assessment criteria are met
+- **REST API**: Full HTTP API for integration with external systems
 
 ## Installation
 
@@ -27,7 +28,64 @@ pip install -e ".[dev]"
 
 ## Quick Start
 
-### Define a Protocol
+### REST API
+
+Start the API server:
+
+```bash
+python run_api.py
+```
+
+Or with uvicorn directly:
+
+```bash
+uvicorn run_api:app --reload
+```
+
+#### API Endpoints
+
+**Health Check**
+```bash
+curl http://localhost:8000/health
+```
+
+**List Protocols**
+```bash
+curl http://localhost:8000/protocols
+```
+
+**Create Session**
+```bash
+curl -X POST http://localhost:8000/sessions \
+  -H "Content-Type: application/json" \
+  -d '{"protocol_id": "generic-assessment-v1"}'
+```
+
+**Get Next Question**
+```bash
+curl http://localhost:8000/sessions/{session_id}/next-question
+```
+
+**Submit Answer**
+```bash
+curl -X POST http://localhost:8000/sessions/{session_id}/answers \
+  -H "Content-Type: application/json" \
+  -d '{"answer": "I prefer to work in teams"}'
+```
+
+**Finalize Assessment**
+```bash
+curl -X POST http://localhost:8000/sessions/{session_id}/finalize
+```
+
+**Get Report**
+```bash
+curl http://localhost:8000/sessions/{session_id}/report
+```
+
+### Python API
+
+#### Define a Protocol
 
 ```python
 from assessment_engine.core.protocol import AssessmentProtocol, Dimension, Scale, StoppingRules
@@ -184,12 +242,25 @@ assessment-engine/
 │   │   ├── session_repo.py     # File-based session storage
 │   │   └── protocol_repo.py    # File-based protocol storage
 │   ├── llm/               # LLM integration
-│   │   ├── client.py      # Anthropic client wrapper
+│   │   ├── config.py      # Multi-provider LLM config
+│   │   ├── factory.py     # LLM client factory
+│   │   ├── base.py        # Base LLM client
+│   │   ├── client.py      # Main LLM client
+│   │   ├── providers/     # Provider implementations
+│   │   │   ├── anthropic_client.py
+│   │   │   └── openai_client.py
 │   │   └── prompts/       # LLM prompts
 │   │       ├── extract_evidence.py
-│       ├── generate_question.py
-│       ├── parse_response.py
-│       └── generate_report.py
+│   │       ├── generate_question.py
+│   │       ├── parse_response.py
+│   │       └── generate_report.py
+│   ├── api/               # REST API
+│   │   ├── app.py         # FastAPI app factory
+│   │   ├── models.py      # Request/response models
+│   │   ├── errors.py      # API error classes
+│   │   └── routes/        # API routes
+│   │       ├── protocols.py
+│   │       └── sessions.py
 │   └── utils/             # Utilities
 ├── tests/                 # Test suite
 ├── protocols/             # Protocol definitions
@@ -236,6 +307,66 @@ Contradictions track conflicting evidence:
 - **Related Dimensions**: Which dimensions are affected
 - **Needs Followup**: Whether the contradiction requires clarification
 
+## Preset Protocol Templates
+
+The Assessment Engine includes several pre-built protocol templates for common assessments:
+
+### MBTI Assessment (`mbti-assessment`)
+
+Assesses personality preferences across four dichotomies based on the Myers-Briggs Type Indicator framework:
+
+- **Extraversion vs Introversion**: Energy source preference (scale: -1 to +1)
+- **Sensing vs Intuition**: Information gathering preference (scale: -1 to +1)
+- **Thinking vs Feeling**: Decision making preference (scale: -1 to +1)
+- **Judging vs Perceiving**: Lifestyle approach preference (scale: -1 to +1)
+
+**Coverage targets**: self_description, work_scenario, social_interaction, decision_making
+
+### DISC Assessment (`disc-assessment`)
+
+Evaluates behavioral preferences across four dimensions:
+
+- **Dominance**: Control and assertiveness (scale: 0 to 1)
+- **Influence**: Social interaction and persuasion (scale: 0 to 1)
+- **Steadiness**: Patience and consistency (scale: 0 to 1)
+- **Conscientiousness**: Accuracy and quality focus (scale: 0 to 1)
+
+**Coverage targets**: work_pressure, team_collaboration, change_adaptation, rule_following
+
+### Communication Style (`communication-style`)
+
+Assesses communication preferences across three key dimensions:
+
+- **Directness**: Straightforward vs nuanced messaging (scale: 0 to 1)
+- **Empathy**: Emotional awareness and consideration (scale: 0 to 1)
+- **Assertiveness**: Confidence in expressing needs (scale: 0 to 1)
+
+**Coverage targets**: feedback_giving, conflict_handling, active_listening, clarity_expression
+
+### Leadership Style (`leadership-style`)
+
+Evaluates leadership approach across three complementary styles:
+
+- **Visionary**: Inspiring and strategic direction-setting (scale: 0 to 1)
+- **Coaching**: Developing individuals through guidance (scale: 0 to 1)
+- **Commanding**: Directing with clear authority (scale: 0 to 1)
+
+**Coverage targets**: team_motivation, delegation, crisis_management, development_focus
+
+### Using Preset Protocols
+
+```bash
+# Create session with MBTI protocol
+curl -X POST http://localhost:8000/sessions \
+  -H "Content-Type: application/json" \
+  -d '{"protocol_id": "mbti-assessment"}'
+```
+
+All preset protocols use the same stopping rules:
+- Minimum 6 rounds, maximum 15 rounds
+- Target confidence: 0.72
+- Minimum coverage ratio: 0.8
+
 ## Testing
 
 Run the test suite:
@@ -260,6 +391,7 @@ The Assessment Engine follows a layered architecture:
 2. **Engine Layer**: Pure functions for state updates, planning, and termination
 3. **Storage Layer**: File-based repositories for persistence
 4. **LLM Layer**: Integration with language models for natural language processing
+5. **API Layer**: FastAPI REST endpoints for external integration
 
 ### Design Principles
 

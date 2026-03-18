@@ -3,7 +3,7 @@ from typing import List
 
 
 class Scale(BaseModel):
-    min: float = Field(default=0, ge=0)
+    min: float = Field(default=0, ge=-1)
     max: float = Field(default=1, le=1)
     default: float = Field(default=0.5)
 

@@ -3,9 +3,18 @@
 Simple CLI demo of the assessment engine.
 
 Usage:
-    python demo.py
+    python demo.py                    # Demo mode (no LLM)
+    python demo.py --anthropic        # Use Anthropic API
+    python demo.py --openai           # Use OpenAI API
+    python demo.py --proxy            # Use Anthropic with custom proxy
+
+Environment variables:
+    ANTHROPIC_API_KEY    - Required for --anthropic and --proxy
+    OPENAI_API_KEY       - Required for --openai
+    CUSTOM_ANTHROPIC_URL - Optional base URL for Anthropic proxy
 """
 
+import argparse
 import os
 import sys
 from pathlib import Path
@@ -15,9 +24,63 @@ sys.path.insert(0, str(Path(__file__).parent / "src"))
 
 from assessment_engine.storage.protocol_repo import ProtocolRepository
 from assessment_engine.engine.assessment_engine import AssessmentEngine
+from assessment_engine.llm import LLMConfig, create_llm_client
+
+
+def create_llm_from_args(args):
+    """Create LLM client based on command-line arguments."""
+    if args.anthropic:
+        config = LLMConfig(
+            provider="anthropic",
+            model=args.model or "claude-opus-4-6"
+        )
+        return create_llm_client(config)
+
+    elif args.openai:
+        config = LLMConfig(
+            provider="openai",
+            model=args.model or "gpt-4o"
+        )
+        return create_llm_client(config)
+
+    elif args.proxy:
+        base_url = os.environ.get("CUSTOM_ANTHROPIC_URL", "https://api.anthropic.com")
+        config = LLMConfig(
+            provider="anthropic",
+            model=args.model or "claude-opus-4-6",
+            base_url=base_url
+        )
+        return create_llm_client(config)
+
+    return None
 
 
 def main():
+    parser = argparse.ArgumentParser(
+        description="Natural Language Assessment Engine Demo"
+    )
+    parser.add_argument(
+        "--anthropic",
+        action="store_true",
+        help="Use Anthropic Claude API (requires ANTHROPIC_API_KEY)"
+    )
+    parser.add_argument(
+        "--openai",
+        action="store_true",
+        help="Use OpenAI API (requires OPENAI_API_KEY)"
+    )
+    parser.add_argument(
+        "--proxy",
+        action="store_true",
+        help="Use Anthropic with custom base URL (requires CUSTOM_ANTHROPIC_URL)"
+    )
+    parser.add_argument(
+        "--model",
+        type=str,
+        help="Model name (default: claude-opus-4-6 for anthropic, gpt-4o for openai)"
+    )
+    args = parser.parse_args()
+
     print("=" * 60)
     print("Natural Language Assessment Engine Demo")
     print("=" * 60)
@@ -36,9 +99,16 @@ def main():
     print(f"Dimensions: {[d.name for d in protocol.dimensions]}")
     print(f"Coverage targets: {protocol.coverage_targets}")
 
-    # Initialize engine (no LLM for demo)
-    print("\nRunning in demo mode (no LLM)")
-    engine = AssessmentEngine(protocol=protocol, llm_client=None)
+    # Create LLM client based on arguments
+    llm_client = create_llm_from_args(args)
+
+    if llm_client:
+        provider = "Anthropic" if args.anthropic else "OpenAI" if args.openai else "Proxy"
+        print(f"\nRunning with {provider} LLM")
+    else:
+        print("\nRunning in demo mode (no LLM)")
+
+    engine = AssessmentEngine(protocol=protocol, llm_client=llm_client)
 
     # Start session
     session = engine.start_session()
