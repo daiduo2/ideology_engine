@@ -115,6 +115,7 @@ ideology_engine/
 ## 内置测评协议
 
 ### MBTI 人格测评
+
 ```bash
 python demo_mbti_optimized.py
 ```
@@ -196,6 +197,7 @@ curl http://localhost:8000/sessions/{session_id}/report
 ## 开发
 
 ### 运行测试
+
 ```bash
 python -m pytest tests/ -v
 ```
