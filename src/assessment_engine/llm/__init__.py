@@ -24,14 +24,15 @@ Example:
     )
     client = create_llm_client(config)
 """
+
+from .base import BaseLLMClient
 from .client import LLMClient
 from .config import LLMConfig
 from .factory import create_llm_client
-from .base import BaseLLMClient
 
 __all__ = [
+    "BaseLLMClient",
     "LLMClient",
     "LLMConfig",
     "create_llm_client",
-    "BaseLLMClient",
 ]

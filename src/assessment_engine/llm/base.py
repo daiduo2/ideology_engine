@@ -1,6 +1,7 @@
 """Base LLM client interface."""
+
 from abc import ABC, abstractmethod
-from typing import Dict, Any, List
+from typing import Any
 
 
 class BaseLLMClient(ABC):
@@ -12,7 +13,7 @@ class BaseLLMClient(ABC):
         system_prompt: str,
         user_message: str,
         temperature: float = 0.3,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Make a structured call to LLM and parse JSON response."""
         pass
 
@@ -21,7 +22,7 @@ class BaseLLMClient(ABC):
         protocol_summary: str,
         state_summary: str,
         user_answer: str,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Parse user response into structured observations."""
         from .prompts.parse_response import SYSTEM_PROMPT
 
@@ -36,12 +37,13 @@ User Answer: {user_answer}
 
     def extract_evidence(
         self,
-        protocol: Dict[str, Any],
-        observations: List[Dict[str, Any]],
-        current_state: Dict[str, Any],
-    ) -> Dict[str, Any]:
+        protocol: dict[str, Any],
+        observations: list[dict[str, Any]],
+        current_state: dict[str, Any],
+    ) -> dict[str, Any]:
         """Extract evidence from observations."""
         import json
+
         from .prompts.extract_evidence import SYSTEM_PROMPT
 
         user_message = f"""
@@ -55,12 +57,13 @@ Current State: {json.dumps(current_state, ensure_ascii=False)}
 
     def generate_question(
         self,
-        target: Dict[str, Any],
+        target: dict[str, Any],
         strategy: str,
-        conversation_history: List[Dict[str, str]],
-    ) -> Dict[str, Any]:
+        conversation_history: list[dict[str, str]],
+    ) -> dict[str, Any]:
         """Generate next question based on target."""
         import json
+
         from .prompts.generate_question import SYSTEM_PROMPT
 
         user_message = f"""
@@ -74,12 +77,13 @@ Conversation History: {json.dumps(conversation_history, ensure_ascii=False)}
 
     def generate_report(
         self,
-        protocol: Dict[str, Any],
-        state: Dict[str, Any],
-        evidence: List[Dict[str, Any]],
-    ) -> Dict[str, Any]:
+        protocol: dict[str, Any],
+        state: dict[str, Any],
+        evidence: list[dict[str, Any]],
+    ) -> dict[str, Any]:
         """Generate final report."""
         import json
+
         from .prompts.generate_report import SYSTEM_PROMPT
 
         user_message = f"""
@@ -99,14 +103,14 @@ Evidence: {json.dumps(evidence, ensure_ascii=False)}
         content = content.strip()
 
         # Try to find JSON in code blocks
-        json_pattern = r'```(?:json)?\s*([\s\S]*?)```'
+        json_pattern = r"```(?:json)?\s*([\s\S]*?)```"
         matches = re.findall(json_pattern, content)
         if matches:
             return matches[0].strip()
 
         # Try to find JSON object/array by matching braces
         # Look for the outermost JSON object
-        brace_pattern = r'(\{[\s\S]*\}|\[[\s\S]*\])'
+        brace_pattern = r"(\{[\s\S]*\}|\[[\s\S]*\])"
         matches = re.search(brace_pattern, content)
         if matches:
             return matches.group(1).strip()
@@ -121,7 +125,7 @@ Evidence: {json.dumps(evidence, ensure_ascii=False)}
         return content.strip()
 
     @staticmethod
-    def _safe_json_parse(content: str) -> Dict[str, Any]:
+    def _safe_json_parse(content: str) -> dict[str, Any]:
         """Safely parse JSON with error recovery.
 
         Attempts to fix common JSON errors before giving up.
@@ -139,15 +143,17 @@ Evidence: {json.dumps(evidence, ensure_ascii=False)}
         fixed_content = content
 
         # Fix 1: Remove trailing commas before } or ]
-        fixed_content = re.sub(r',\s*}', '}', fixed_content)
-        fixed_content = re.sub(r',\s*]', ']', fixed_content)
+        fixed_content = re.sub(r",\s*}", "}", fixed_content)
+        fixed_content = re.sub(r",\s*]", "]", fixed_content)
 
         # Fix 2: Fix missing commas between array/object elements
         # This is harder - look for } followed by { without comma
-        fixed_content = re.sub(r'(\}|\])\s*(\{|\[)', r'\1,\2', fixed_content)
+        fixed_content = re.sub(r"(\}|\])\s*(\{|\[)", r"\1,\2", fixed_content)
 
         # Fix 3: Remove control characters
-        fixed_content = ''.join(char for char in fixed_content if ord(char) >= 32 or char in '\n\r\t')
+        fixed_content = "".join(
+            char for char in fixed_content if ord(char) >= 32 or char in "\n\r\t"
+        )
 
         # Try parsing again
         try:
@@ -156,16 +162,16 @@ Evidence: {json.dumps(evidence, ensure_ascii=False)}
             # If still failing, try to extract just the first valid JSON object
             try:
                 # Find first { and matching }
-                start = fixed_content.find('{')
+                start = fixed_content.find("{")
                 if start != -1:
                     brace_count = 0
                     for i, char in enumerate(fixed_content[start:], start):
-                        if char == '{':
+                        if char == "{":
                             brace_count += 1
-                        elif char == '}':
+                        elif char == "}":
                             brace_count -= 1
                             if brace_count == 0:
-                                return json.loads(fixed_content[start:i+1])
-            except:
+                                return json.loads(fixed_content[start : i + 1])
+            except Exception:
                 pass
             raise e

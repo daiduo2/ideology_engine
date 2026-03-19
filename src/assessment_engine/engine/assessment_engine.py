@@ -1,16 +1,22 @@
 """Main Assessment Engine orchestrator."""
-import uuid
-from typing import Dict, Any, List, Optional
-from datetime import datetime
 
+import uuid
+from datetime import datetime
+from typing import Any, Optional
+
+from assessment_engine.core.contradiction import Contradiction
+from assessment_engine.core.evidence import DimensionMapping, Evidence
 from assessment_engine.core.protocol import AssessmentProtocol
 from assessment_engine.core.session import AssessmentSession
-from assessment_engine.core.state import AssessmentState, DimensionState, Coverage, TerminationStatus
-from assessment_engine.core.evidence import Evidence, DimensionMapping
-from assessment_engine.core.contradiction import Contradiction
+from assessment_engine.core.state import (
+    AssessmentState,
+    Coverage,
+    DimensionState,
+    TerminationStatus,
+)
+from assessment_engine.engine.probe_planner import ProbePlanner
 from assessment_engine.engine.state_updater import StateUpdater
 from assessment_engine.engine.termination_checker import TerminationChecker
-from assessment_engine.engine.probe_planner import ProbePlanner
 
 
 class AssessmentEngine:
@@ -40,7 +46,7 @@ class AssessmentEngine:
             for dim in protocol.dimensions
         }
 
-    def start_session(self, user_context: Optional[Dict[str, Any]] = None) -> AssessmentSession:
+    def start_session(self, user_context: Optional[dict[str, Any]] = None) -> AssessmentSession:
         """Start a new assessment session."""
         session_id = str(uuid.uuid4())
 
@@ -60,7 +66,7 @@ class AssessmentEngine:
 
         return self.session
 
-    def get_next_question(self) -> Dict[str, Any]:
+    def get_next_question(self) -> dict[str, Any]:
         """Get the next question for the user."""
         if not self.session:
             raise RuntimeError("No active session. Call start_session() first.")
@@ -109,18 +115,20 @@ class AssessmentEngine:
             "round_index": self.session.round_index,
         }
 
-    def submit_answer(self, answer: str) -> Dict[str, Any]:
+    def submit_answer(self, answer: str) -> dict[str, Any]:
         """Submit user answer and process it."""
         if not self.session:
             raise RuntimeError("No active session. Call start_session() first.")
 
         # Log the answer
-        self.session.conversation_log.append({
-            "role": "user",
-            "content": answer,
-            "round_index": self.session.round_index,
-            "timestamp": datetime.utcnow().isoformat(),
-        })
+        self.session.conversation_log.append(
+            {
+                "role": "user",
+                "content": answer,
+                "round_index": self.session.round_index,
+                "timestamp": datetime.utcnow().isoformat(),
+            }
+        )
 
         # Process with LLM if available
         if self.llm_client:
@@ -135,7 +143,7 @@ class AssessmentEngine:
 
         return result
 
-    def _process_with_llm(self, answer: str) -> Dict[str, Any]:
+    def _process_with_llm(self, answer: str) -> dict[str, Any]:
         """Process answer using LLM."""
         state = AssessmentState.model_validate(self.session.state)
 
@@ -210,7 +218,7 @@ class AssessmentEngine:
             "termination": termination.model_dump(),
         }
 
-    def _process_without_llm(self, answer: str) -> Dict[str, Any]:
+    def _process_without_llm(self, answer: str) -> dict[str, Any]:
         """Process answer without LLM (placeholder for testing)."""
         state = AssessmentState.model_validate(self.session.state)
 
@@ -233,7 +241,7 @@ class AssessmentEngine:
         }
         return defaults.get(target.type, "Tell me more.")
 
-    def finalize(self) -> Dict[str, Any]:
+    def finalize(self) -> dict[str, Any]:
         """Finalize assessment and generate report."""
         if not self.session:
             raise RuntimeError("No active session.")
@@ -262,7 +270,7 @@ class AssessmentEngine:
             "report": report,
         }
 
-    def get_debug_trace(self) -> Dict[str, Any]:
+    def get_debug_trace(self) -> dict[str, Any]:
         """Get debug trace for current session."""
         if not self.session:
             raise RuntimeError("No active session.")

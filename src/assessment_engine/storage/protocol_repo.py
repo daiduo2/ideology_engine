@@ -1,6 +1,7 @@
 import json
 from pathlib import Path
-from typing import List, Optional
+from typing import Optional
+
 from assessment_engine.core.protocol import AssessmentProtocol
 
 
@@ -27,27 +28,29 @@ class ProtocolRepository:
         if not file_path:
             return None
 
-        with open(file_path, "r", encoding="utf-8") as f:
+        with open(file_path, encoding="utf-8") as f:
             if file_path.suffix in [".yaml", ".yml"]:
                 try:
                     import yaml
+
                     data = yaml.safe_load(f)
-                except ImportError:
-                    raise ImportError("PyYAML required for YAML protocol files")
+                except ImportError as e:
+                    raise ImportError("PyYAML required for YAML protocol files") from e
             else:
                 data = json.load(f)
 
         return AssessmentProtocol.model_validate(data)
 
-    def list_all(self) -> List[AssessmentProtocol]:
+    def list_all(self) -> list[AssessmentProtocol]:
         """List all available protocols."""
         protocols = []
 
         for file_path in self.protocols_dir.iterdir():
             if file_path.suffix in [".json", ".yaml", ".yml"]:
-                with open(file_path, "r", encoding="utf-8") as f:
+                with open(file_path, encoding="utf-8") as f:
                     if file_path.suffix in [".yaml", ".yml"]:
                         import yaml
+
                         data = yaml.safe_load(f)
                     else:
                         data = json.load(f)

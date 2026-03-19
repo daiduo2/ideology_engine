@@ -1,22 +1,21 @@
 """Session API routes."""
-from typing import Optional
+
 from fastapi import APIRouter, Depends
 
-from assessment_engine.storage.protocol_repo import ProtocolRepository
-from assessment_engine.storage.session_repo import SessionRepository
-from assessment_engine.engine.assessment_engine import AssessmentEngine
-from assessment_engine.llm import LLMConfig, create_llm_client
+from assessment_engine.api.errors import NotFoundError, ValidationError
 from assessment_engine.api.models import (
-    StartSessionRequest,
+    FinalizeResponse,
+    QuestionResponse,
+    ReportResponse,
     SessionResponse,
+    StartSessionRequest,
     SubmitAnswerRequest,
     SubmitAnswerResponse,
-    QuestionResponse,
-    FinalizeResponse,
-    ReportResponse,
 )
-from assessment_engine.api.errors import NotFoundError, ValidationError
-
+from assessment_engine.engine.assessment_engine import AssessmentEngine
+from assessment_engine.llm import LLMConfig, create_llm_client
+from assessment_engine.storage.protocol_repo import ProtocolRepository
+from assessment_engine.storage.session_repo import SessionRepository
 
 router = APIRouter()
 
@@ -24,6 +23,7 @@ router = APIRouter()
 def get_protocol_repo() -> ProtocolRepository:
     """Get protocol repository instance."""
     from pathlib import Path
+
     base_path = Path(__file__).parent.parent.parent.parent.parent.resolve()
     return ProtocolRepository(base_path=base_path)
 
@@ -31,6 +31,7 @@ def get_protocol_repo() -> ProtocolRepository:
 def get_session_repo() -> SessionRepository:
     """Get session repository instance."""
     from pathlib import Path
+
     base_path = Path(__file__).parent.parent.parent.parent.parent.resolve()
     return SessionRepository(base_path=base_path)
 
@@ -70,8 +71,7 @@ def create_engine(protocol_id: str) -> AssessmentEngine:
 
 @router.post("", response_model=SessionResponse, status_code=201)
 async def start_session(
-    request: StartSessionRequest,
-    session_repo: SessionRepository = Depends(get_session_repo)
+    request: StartSessionRequest, session_repo: SessionRepository = Depends(get_session_repo)
 ):
     """Start a new assessment session."""
     engine = create_engine(request.protocol_id)
@@ -92,10 +92,7 @@ async def start_session(
 
 
 @router.get("/{session_id}", response_model=SessionResponse)
-async def get_session(
-    session_id: str,
-    session_repo: SessionRepository = Depends(get_session_repo)
-):
+async def get_session(session_id: str, session_repo: SessionRepository = Depends(get_session_repo)):
     """Get session by ID."""
     session = session_repo.load(session_id)
     if not session:
@@ -116,7 +113,7 @@ async def get_session(
 async def submit_answer(
     session_id: str,
     request: SubmitAnswerRequest,
-    session_repo: SessionRepository = Depends(get_session_repo)
+    session_repo: SessionRepository = Depends(get_session_repo),
 ):
     """Submit an answer and get next state."""
     session = session_repo.load(session_id)
@@ -147,8 +144,7 @@ async def submit_answer(
 
 @router.get("/{session_id}/next-question", response_model=QuestionResponse)
 async def get_next_question(
-    session_id: str,
-    session_repo: SessionRepository = Depends(get_session_repo)
+    session_id: str, session_repo: SessionRepository = Depends(get_session_repo)
 ):
     """Get the next question for the session."""
     session = session_repo.load(session_id)
@@ -179,8 +175,7 @@ async def get_next_question(
 
 @router.post("/{session_id}/finalize", response_model=FinalizeResponse)
 async def finalize_session(
-    session_id: str,
-    session_repo: SessionRepository = Depends(get_session_repo)
+    session_id: str, session_repo: SessionRepository = Depends(get_session_repo)
 ):
     """Finalize the assessment and generate report."""
     session = session_repo.load(session_id)
@@ -205,10 +200,7 @@ async def finalize_session(
 
 
 @router.get("/{session_id}/report", response_model=ReportResponse)
-async def get_report(
-    session_id: str,
-    session_repo: SessionRepository = Depends(get_session_repo)
-):
+async def get_report(session_id: str, session_repo: SessionRepository = Depends(get_session_repo)):
     """Get the final report for a completed session."""
     session = session_repo.load(session_id)
     if not session:

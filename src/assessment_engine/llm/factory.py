@@ -1,6 +1,7 @@
 """Factory for creating LLM clients based on configuration."""
-from assessment_engine.llm.config import LLMConfig
+
 from assessment_engine.llm.base import BaseLLMClient
+from assessment_engine.llm.config import LLMConfig
 
 
 def create_llm_client(config: LLMConfig = None) -> BaseLLMClient:
@@ -46,9 +47,11 @@ def create_llm_client(config: LLMConfig = None) -> BaseLLMClient:
 
     if config.provider == "anthropic":
         from assessment_engine.llm.providers.anthropic_client import AnthropicClient
+
         return AnthropicClient(config)
     elif config.provider == "openai":
         from assessment_engine.llm.providers.openai_client import OpenAIClient
+
         return OpenAIClient(config)
     else:
         raise ValueError(f"Unknown provider: {config.provider}")

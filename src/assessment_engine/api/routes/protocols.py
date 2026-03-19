@@ -1,11 +1,10 @@
 """Protocol API routes."""
-from typing import List
+
 from fastapi import APIRouter, Depends
 
+from assessment_engine.api.errors import ConflictError, NotFoundError
+from assessment_engine.api.models import CreateProtocolRequest, ProtocolResponse
 from assessment_engine.storage.protocol_repo import ProtocolRepository
-from assessment_engine.api.models import ProtocolResponse, CreateProtocolRequest
-from assessment_engine.api.errors import NotFoundError, ConflictError
-
 
 router = APIRouter()
 
@@ -13,11 +12,12 @@ router = APIRouter()
 def get_protocol_repo() -> ProtocolRepository:
     """Get protocol repository instance."""
     from pathlib import Path
+
     base_path = Path(__file__).parent.parent.parent.parent.parent.resolve()
     return ProtocolRepository(base_path=base_path)
 
 
-@router.get("", response_model=List[ProtocolResponse])
+@router.get("", response_model=list[ProtocolResponse])
 async def list_protocols(repo: ProtocolRepository = Depends(get_protocol_repo)):
     """List all available protocols."""
     protocols = repo.list_all()
@@ -35,10 +35,7 @@ async def list_protocols(repo: ProtocolRepository = Depends(get_protocol_repo)):
 
 
 @router.get("/{protocol_id}", response_model=ProtocolResponse)
-async def get_protocol(
-    protocol_id: str,
-    repo: ProtocolRepository = Depends(get_protocol_repo)
-):
+async def get_protocol(protocol_id: str, repo: ProtocolRepository = Depends(get_protocol_repo)):
     """Get protocol by ID."""
     protocol = repo.load(protocol_id)
     if not protocol:
@@ -56,8 +53,7 @@ async def get_protocol(
 
 @router.post("", response_model=ProtocolResponse, status_code=201)
 async def create_protocol(
-    request: CreateProtocolRequest,
-    repo: ProtocolRepository = Depends(get_protocol_repo)
+    request: CreateProtocolRequest, repo: ProtocolRepository = Depends(get_protocol_repo)
 ):
     """Create a new protocol."""
     # Check if protocol already exists
@@ -95,13 +91,9 @@ async def create_protocol(
 
 
 @router.delete("/{protocol_id}", status_code=204)
-async def delete_protocol(
-    protocol_id: str,
-    repo: ProtocolRepository = Depends(get_protocol_repo)
-):
+async def delete_protocol(protocol_id: str, repo: ProtocolRepository = Depends(get_protocol_repo)):
     """Delete a protocol."""
     import os
-    from pathlib import Path
 
     protocol = repo.load(protocol_id)
     if not protocol:

@@ -1,6 +1,6 @@
 """Anthropic LLM client implementation."""
-import json
-from typing import Dict, Any
+
+from typing import Any
 
 from anthropic import Anthropic
 
@@ -33,7 +33,7 @@ class AnthropicClient(BaseLLMClient):
         system_prompt: str,
         user_message: str,
         temperature: float = 0.3,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Make a structured call to Claude and parse JSON response."""
         message = self.client.messages.create(
             model=self.config.model,

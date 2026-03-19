@@ -1,6 +1,7 @@
 import json
 from pathlib import Path
-from typing import List, Optional
+from typing import Optional
+
 from assessment_engine.core.session import AssessmentSession
 
 
@@ -21,6 +22,7 @@ class SessionRepository:
 
         # Update timestamp
         from datetime import datetime
+
         session.updated_at = datetime.utcnow()
 
         with open(file_path, "w", encoding="utf-8") as f:
@@ -33,17 +35,17 @@ class SessionRepository:
         if not file_path.exists():
             return None
 
-        with open(file_path, "r", encoding="utf-8") as f:
+        with open(file_path, encoding="utf-8") as f:
             data = json.load(f)
 
         return AssessmentSession.model_validate(data)
 
-    def list_all(self) -> List[AssessmentSession]:
+    def list_all(self) -> list[AssessmentSession]:
         """List all sessions."""
         sessions = []
 
         for file_path in self.base_path.glob("*.json"):
-            with open(file_path, "r", encoding="utf-8") as f:
+            with open(file_path, encoding="utf-8") as f:
                 data = json.load(f)
                 sessions.append(AssessmentSession.model_validate(data))
 

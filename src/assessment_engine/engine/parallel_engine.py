@@ -3,21 +3,27 @@
 This module provides a parallelized version of the assessment engine
 where evidence extraction and question generation happen concurrently.
 """
+
 import asyncio
 import time
 import uuid
-from typing import Dict, Any, List, Optional, Tuple
-from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime
+from typing import Any, Optional
 
+from assessment_engine.core.contradiction import Contradiction
+from assessment_engine.core.evidence import DimensionMapping, Evidence
 from assessment_engine.core.protocol import AssessmentProtocol
 from assessment_engine.core.session import AssessmentSession
-from assessment_engine.core.state import AssessmentState, DimensionState, Coverage, TerminationStatus
-from assessment_engine.core.evidence import Evidence, DimensionMapping
-from assessment_engine.core.contradiction import Contradiction
+from assessment_engine.core.state import (
+    AssessmentState,
+    Coverage,
+    DimensionState,
+    TerminationStatus,
+)
+from assessment_engine.engine.probe_planner import ProbePlanner
 from assessment_engine.engine.state_updater import StateUpdater
 from assessment_engine.engine.termination_checker import TerminationChecker
-from assessment_engine.engine.probe_planner import ProbePlanner
 
 
 class ParallelAssessmentEngine:
@@ -51,8 +57,8 @@ class ParallelAssessmentEngine:
         self.executor = ThreadPoolExecutor(max_workers=max_workers)
 
         # Pending evidence processing
-        self._pending_evidence_futures: List[Any] = []
-        self._last_evidence_result: Optional[Dict[str, Any]] = None
+        self._pending_evidence_futures: list[Any] = []
+        self._last_evidence_result: Optional[dict[str, Any]] = None
 
         # Initialize dimension states from protocol
         self.initial_dimensions = {
@@ -65,7 +71,7 @@ class ParallelAssessmentEngine:
             for dim in protocol.dimensions
         }
 
-    def start_session(self, user_context: Optional[Dict[str, Any]] = None) -> AssessmentSession:
+    def start_session(self, user_context: Optional[dict[str, Any]] = None) -> AssessmentSession:
         """Start a new assessment session."""
         session_id = str(uuid.uuid4())
 
@@ -85,7 +91,7 @@ class ParallelAssessmentEngine:
 
         return self.session
 
-    async def get_next_question_async(self) -> Dict[str, Any]:
+    async def get_next_question_async(self) -> dict[str, Any]:
         """Get the next question asynchronously."""
         if not self.session:
             raise RuntimeError("No active session. Call start_session() first.")
@@ -151,7 +157,7 @@ class ParallelAssessmentEngine:
             "round_index": self.session.round_index,
         }
 
-    def _generate_question_sync(self, target) -> Dict[str, Any]:
+    def _generate_question_sync(self, target) -> dict[str, Any]:
         """Synchronous wrapper for question generation."""
         return self.llm_client.generate_question(
             target=target.model_dump(),
@@ -159,7 +165,7 @@ class ParallelAssessmentEngine:
             conversation_history=self.session.conversation_log,
         )
 
-    async def submit_answer_async(self, answer: str) -> Dict[str, Any]:
+    async def submit_answer_async(self, answer: str) -> dict[str, Any]:
         """Submit user answer and process it asynchronously.
 
         This method:
@@ -174,12 +180,14 @@ class ParallelAssessmentEngine:
             raise RuntimeError("No active session. Call start_session() first.")
 
         # Log the answer
-        self.session.conversation_log.append({
-            "role": "user",
-            "content": answer,
-            "round_index": self.session.round_index,
-            "timestamp": datetime.utcnow().isoformat(),
-        })
+        self.session.conversation_log.append(
+            {
+                "role": "user",
+                "content": answer,
+                "round_index": self.session.round_index,
+                "timestamp": datetime.utcnow().isoformat(),
+            }
+        )
 
         # Process with LLM if available
         if self.llm_client:
@@ -210,10 +218,10 @@ class ParallelAssessmentEngine:
 
         return result
 
-    def _process_evidence_sync(self, answer: str) -> Dict[str, Any]:
+    def _process_evidence_sync(self, answer: str) -> dict[str, Any]:
         """Process evidence synchronously (runs in thread pool)."""
         start_time = time.time()
-        print(f"    [DEBUG] 开始后台证据处理...")
+        print("    [DEBUG] 开始后台证据处理...")
 
         state = AssessmentState.model_validate(self.session.state)
 
@@ -316,7 +324,7 @@ class ParallelAssessmentEngine:
             if done:
                 self._last_evidence_result = done.pop().result()
 
-    def _process_without_llm(self, answer: str) -> Dict[str, Any]:
+    def _process_without_llm(self, answer: str) -> dict[str, Any]:
         """Process answer without LLM (placeholder for testing)."""
         state = AssessmentState.model_validate(self.session.state)
 
@@ -338,7 +346,7 @@ class ParallelAssessmentEngine:
         }
         return defaults.get(target.type, "Tell me more.")
 
-    async def finalize_async(self) -> Dict[str, Any]:
+    async def finalize_async(self) -> dict[str, Any]:
         """Finalize assessment and generate report asynchronously."""
         if not self.session:
             raise RuntimeError("No active session.")
@@ -371,7 +379,7 @@ class ParallelAssessmentEngine:
             "report": report,
         }
 
-    def _generate_report_sync(self, state: AssessmentState) -> Dict[str, Any]:
+    def _generate_report_sync(self, state: AssessmentState) -> dict[str, Any]:
         """Synchronous wrapper for report generation."""
         return self.llm_client.generate_report(
             protocol=self.protocol.model_dump(),

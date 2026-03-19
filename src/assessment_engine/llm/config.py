@@ -1,6 +1,8 @@
 """LLM configuration for multiple providers."""
-from pydantic import BaseModel, Field, ConfigDict
-from typing import Optional, Literal
+
+from typing import Literal, Optional
+
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class LLMConfig(BaseModel):
@@ -41,42 +43,26 @@ class LLMConfig(BaseModel):
     """
 
     provider: Literal["anthropic", "openai"] = Field(
-        default="anthropic",
-        description="LLM provider: 'anthropic' or 'openai'"
+        default="anthropic", description="LLM provider: 'anthropic' or 'openai'"
     )
 
     api_key: Optional[str] = Field(
-        default=None,
-        description="API key. If not provided, will use environment variable"
+        default=None, description="API key. If not provided, will use environment variable"
     )
 
-    model: str = Field(
-        default="claude-opus-4-6",
-        description="Model name to use"
-    )
+    model: str = Field(default="claude-opus-4-6", description="Model name to use")
 
     base_url: Optional[str] = Field(
-        default=None,
-        description="Custom base URL for API (for proxies or custom endpoints)"
+        default=None, description="Custom base URL for API (for proxies or custom endpoints)"
     )
 
     temperature: float = Field(
-        default=0.3,
-        ge=0,
-        le=2,
-        description="Default temperature for generation"
+        default=0.3, ge=0, le=2, description="Default temperature for generation"
     )
 
-    max_tokens: int = Field(
-        default=4096,
-        ge=1,
-        description="Maximum tokens to generate"
-    )
+    max_tokens: int = Field(default=4096, ge=1, description="Maximum tokens to generate")
 
-    timeout: Optional[float] = Field(
-        default=60.0,
-        description="Request timeout in seconds"
-    )
+    timeout: Optional[float] = Field(default=60.0, description="Request timeout in seconds")
 
     model_config = ConfigDict(frozen=True)
 
@@ -90,12 +76,11 @@ class LLMConfig(BaseModel):
             "openai": "OPENAI_API_KEY",
         }
         import os
+
         env_var = env_vars.get(self.provider)
         if env_var:
             key = os.environ.get(env_var)
             if key:
                 return key
 
-        raise ValueError(
-            f"API key not provided and {env_vars.get(self.provider)} not set"
-        )
+        raise ValueError(f"API key not provided and {env_vars.get(self.provider)} not set")

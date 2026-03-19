@@ -1,7 +1,8 @@
-from typing import List, Optional
-from assessment_engine.core.state import AssessmentState, DimensionState, Coverage
-from assessment_engine.core.evidence import Evidence
+from typing import Optional
+
 from assessment_engine.core.contradiction import Contradiction
+from assessment_engine.core.evidence import Evidence
+from assessment_engine.core.state import AssessmentState, Coverage, DimensionState
 
 
 class StateUpdater:
@@ -13,10 +14,10 @@ class StateUpdater:
     def update_state(
         self,
         state: AssessmentState,
-        new_evidence: List[Evidence],
+        new_evidence: list[Evidence],
         round_index: int,
-        coverage_targets: Optional[List[str]] = None,
-        new_contradictions: Optional[List[Contradiction]] = None,
+        coverage_targets: Optional[list[str]] = None,
+        new_contradictions: Optional[list[Contradiction]] = None,
     ) -> AssessmentState:
         """Update assessment state based on new evidence."""
         # Update dimensions
@@ -83,8 +84,8 @@ class StateUpdater:
         self,
         dimensions: dict,
         coverage: Coverage,
-        coverage_targets: List[str],
-    ) -> List[str]:
+        coverage_targets: list[str],
+    ) -> list[str]:
         """Generate list of open questions based on current state."""
         open_questions = []
 
@@ -100,7 +101,7 @@ class StateUpdater:
 
         return open_questions
 
-    def calculate_coverage_ratio(self, coverage: Coverage, targets: List[str]) -> float:
+    def calculate_coverage_ratio(self, coverage: Coverage, targets: list[str]) -> float:
         """Calculate coverage ratio."""
         if not targets:
             return 1.0

@@ -1,5 +1,4 @@
 from pydantic import BaseModel, Field
-from typing import List
 
 
 class Scale(BaseModel):
@@ -26,8 +25,8 @@ class AssessmentProtocol(BaseModel):
     id: str
     name: str
     description: str
-    dimensions: List[Dimension]
-    coverage_targets: List[str]
-    question_strategies: List[str]
+    dimensions: list[Dimension]
+    coverage_targets: list[str]
+    question_strategies: list[str]
     stopping_rules: StoppingRules
     report_template: str

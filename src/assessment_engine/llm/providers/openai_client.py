@@ -1,6 +1,7 @@
 """OpenAI-compatible LLM client implementation."""
+
 import json
-from typing import Dict, Any
+from typing import Any
 
 from assessment_engine.llm.base import BaseLLMClient
 from assessment_engine.llm.config import LLMConfig
@@ -20,11 +21,10 @@ class OpenAIClient(BaseLLMClient):
     def __init__(self, config: LLMConfig = None):
         try:
             from openai import OpenAI
-        except ImportError:
+        except ImportError as e:
             raise ImportError(
-                "OpenAI client requires 'openai' package. "
-                "Install with: pip install openai"
-            )
+                "OpenAI client requires 'openai' package. Install with: pip install openai"
+            ) from e
 
         if config is None:
             config = LLMConfig(provider="openai", model="gpt-4o")
@@ -47,7 +47,7 @@ class OpenAIClient(BaseLLMClient):
         system_prompt: str,
         user_message: str,
         temperature: float = 0.3,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Make a structured call to OpenAI API and parse JSON response."""
         messages = [
             {"role": "system", "content": system_prompt},

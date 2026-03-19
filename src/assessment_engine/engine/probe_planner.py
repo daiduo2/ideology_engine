@@ -1,7 +1,8 @@
-from typing import List, Optional
+from typing import Optional
+
+from assessment_engine.core.contradiction import Contradiction
 from assessment_engine.core.protocol import AssessmentProtocol
 from assessment_engine.core.state import AssessmentState, NextTarget
-from assessment_engine.core.contradiction import Contradiction
 
 
 class ProbePlanner:
@@ -13,8 +14,8 @@ class ProbePlanner:
     def plan_next(
         self,
         state: AssessmentState,
-        coverage_targets: Optional[List[str]] = None,
-        unresolved_contradictions: Optional[List[Contradiction]] = None,
+        coverage_targets: Optional[list[str]] = None,
+        unresolved_contradictions: Optional[list[Contradiction]] = None,
     ) -> NextTarget:
         """
         Determine the next probing target.
@@ -38,7 +39,9 @@ class ProbePlanner:
 
         # Priority 2: Severe contradictions
         if unresolved_contradictions:
-            severe = [c for c in unresolved_contradictions if c.severity == "high" and c.needs_followup]
+            severe = [
+                c for c in unresolved_contradictions if c.severity == "high" and c.needs_followup
+            ]
             if severe:
                 return NextTarget(
                     type="contradiction",

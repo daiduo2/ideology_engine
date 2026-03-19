@@ -3,10 +3,12 @@
 This module provides functionality to detect relationships between dimensions,
 analyze correlations, detect contradictions, and group related dimensions.
 """
-from typing import Dict, List, Optional, Set, Tuple, Any
+
+from typing import Any, Optional
+
 from pydantic import BaseModel, Field
 
-from assessment_engine.core.evidence import Evidence, DimensionMapping
+from assessment_engine.core.evidence import Evidence
 from assessment_engine.core.state import AssessmentState
 
 
@@ -24,11 +26,11 @@ class DimensionCorrelation(BaseModel):
     dimension_a: str
     dimension_b: str
     coefficient: float = Field(..., ge=-1, le=1)
-    shared_evidence_ids: List[str] = Field(default_factory=list)
+    shared_evidence_ids: list[str] = Field(default_factory=list)
     confidence: float = Field(default=0.0, ge=0, le=1)
 
     @property
-    def dimension_pair(self) -> Tuple[str, str]:
+    def dimension_pair(self) -> tuple[str, str]:
         """Return sorted dimension pair for consistent lookup."""
         return tuple(sorted([self.dimension_a, self.dimension_b]))
 
@@ -41,19 +43,17 @@ class CorrelationMatrix(BaseModel):
         correlations: Dictionary mapping dimension pairs to correlations
     """
 
-    dimension_ids: List[str]
-    correlations: Dict[Tuple[str, str], DimensionCorrelation] = Field(default_factory=dict)
+    dimension_ids: list[str]
+    correlations: dict[tuple[str, str], DimensionCorrelation] = Field(default_factory=dict)
 
     def get_correlation(self, dim_a: str, dim_b: str) -> Optional[DimensionCorrelation]:
         """Get correlation between two dimensions."""
         pair_key = tuple(sorted([dim_a, dim_b]))
         return self.correlations.get(pair_key)
 
-    def get_correlations_for_dimension(self, dim_id: str) -> List[DimensionCorrelation]:
+    def get_correlations_for_dimension(self, dim_id: str) -> list[DimensionCorrelation]:
         """Get all correlations involving a specific dimension."""
-        return [
-            corr for pair, corr in self.correlations.items() if dim_id in pair
-        ]
+        return [corr for pair, corr in self.correlations.items() if dim_id in pair]
 
 
 class EvidenceContradiction(BaseModel):
@@ -67,7 +67,7 @@ class EvidenceContradiction(BaseModel):
     """
 
     evidence_id: str
-    dimension_pair: Tuple[str, str]
+    dimension_pair: tuple[str, str]
     contradiction_type: str  # e.g., "opposing_effects"
     description: str = ""
 
@@ -91,7 +91,7 @@ class CorrelationAnalyzer:
         self.correlation_threshold = correlation_threshold
 
     def analyze_correlations(
-        self, state: AssessmentState, evidence_list: List[Evidence]
+        self, state: AssessmentState, evidence_list: list[Evidence]
     ) -> CorrelationMatrix:
         """Analyze correlations between dimensions based on evidence.
 
@@ -107,10 +107,10 @@ class CorrelationAnalyzer:
             CorrelationMatrix containing all pairwise correlations
         """
         dimension_ids = list(state.dimensions.keys())
-        correlations: Dict[Tuple[str, str], DimensionCorrelation] = {}
+        correlations: dict[tuple[str, str], DimensionCorrelation] = {}
 
         # Track evidence effects per dimension pair
-        pair_evidence: Dict[Tuple[str, str], List[Tuple[str, float, float]]] = {}
+        pair_evidence: dict[tuple[str, str], list[tuple[str, float, float]]] = {}
 
         for evidence in evidence_list:
             if len(evidence.mapped_dimensions) < 2:
@@ -149,9 +149,7 @@ class CorrelationAnalyzer:
             if total_weight == 0:
                 continue
 
-            weighted_sum = sum(
-                contrib * conf for _, contrib, conf in evidence_data
-            )
+            weighted_sum = sum(contrib * conf for _, contrib, conf in evidence_data)
             base_coefficient = weighted_sum / total_weight
 
             # Scale coefficient based on agreement among evidence
@@ -174,7 +172,9 @@ class CorrelationAnalyzer:
 
             # Calculate overall confidence based on evidence count and quality
             avg_confidence = sum(conf for _, _, conf in evidence_data) / len(evidence_data)
-            evidence_boost = min(0.3, len(evidence_data) * 0.05)  # More evidence = higher confidence
+            evidence_boost = min(
+                0.3, len(evidence_data) * 0.05
+            )  # More evidence = higher confidence
             confidence = min(1.0, avg_confidence + evidence_boost)
 
             correlations[pair_key] = DimensionCorrelation(
@@ -187,9 +187,7 @@ class CorrelationAnalyzer:
 
         return CorrelationMatrix(dimension_ids=dimension_ids, correlations=correlations)
 
-    def detect_contradictions(
-        self, evidence_list: List[Evidence]
-    ) -> List[EvidenceContradiction]:
+    def detect_contradictions(self, evidence_list: list[Evidence]) -> list[EvidenceContradiction]:
         """Detect contradictions within evidence.
 
         A contradiction occurs when the same evidence supports one dimension
@@ -201,7 +199,7 @@ class CorrelationAnalyzer:
         Returns:
             List of detected contradictions
         """
-        contradictions: List[EvidenceContradiction] = []
+        contradictions: list[EvidenceContradiction] = []
 
         for evidence in evidence_list:
             if len(evidence.mapped_dimensions) < 2:
@@ -230,9 +228,7 @@ class CorrelationAnalyzer:
 
         return contradictions
 
-    def get_dimension_clusters(
-        self, matrix: CorrelationMatrix
-    ) -> List[List[str]]:
+    def get_dimension_clusters(self, matrix: CorrelationMatrix) -> list[list[str]]:
         """Group dimensions into clusters based on positive correlations.
 
         Dimensions with strong positive correlations are grouped together.
@@ -245,7 +241,7 @@ class CorrelationAnalyzer:
             List of dimension clusters (each cluster is a list of dimension IDs)
         """
         # Build adjacency list for positive correlations above threshold
-        adjacency: Dict[str, Set[str]] = {dim: set() for dim in matrix.dimension_ids}
+        adjacency: dict[str, set[str]] = {dim: set() for dim in matrix.dimension_ids}
 
         for pair_key, correlation in matrix.correlations.items():
             if (
@@ -257,15 +253,15 @@ class CorrelationAnalyzer:
                 adjacency[dim_b].add(dim_a)
 
         # Find connected components using BFS
-        visited: Set[str] = set()
-        clusters: List[List[str]] = []
+        visited: set[str] = set()
+        clusters: list[list[str]] = []
 
         for dim in matrix.dimension_ids:
             if dim in visited:
                 continue
 
             # BFS to find all connected dimensions
-            cluster: List[str] = []
+            cluster: list[str] = []
             queue = [dim]
             visited.add(dim)
 
@@ -286,7 +282,7 @@ class CorrelationAnalyzer:
 
     def get_strong_correlations(
         self, matrix: CorrelationMatrix, threshold: float = 0.5
-    ) -> List[DimensionCorrelation]:
+    ) -> list[DimensionCorrelation]:
         """Get correlations above a specified threshold.
 
         Args:
@@ -296,11 +292,7 @@ class CorrelationAnalyzer:
         Returns:
             List of strong correlations
         """
-        return [
-            corr
-            for corr in matrix.correlations.values()
-            if abs(corr.coefficient) >= threshold
-        ]
+        return [corr for corr in matrix.correlations.values() if abs(corr.coefficient) >= threshold]
 
     def generate_correlation_insights(self, matrix: CorrelationMatrix) -> str:
         """Generate human-readable insights about correlations.
@@ -314,14 +306,12 @@ class CorrelationAnalyzer:
         if not matrix.correlations:
             return "No correlations detected between dimensions."
 
-        strong_positive = [
-            corr for corr in matrix.correlations.values() if corr.coefficient >= 0.5
-        ]
+        strong_positive = [corr for corr in matrix.correlations.values() if corr.coefficient >= 0.5]
         strong_negative = [
             corr for corr in matrix.correlations.values() if corr.coefficient <= -0.5
         ]
 
-        insights_parts: List[str] = []
+        insights_parts: list[str] = []
 
         if strong_positive:
             insights_parts.append(
@@ -349,7 +339,7 @@ class CorrelationAnalyzer:
         return " ".join(insights_parts)
 
     def update_state_with_correlations(
-        self, state: AssessmentState, evidence_list: List[Evidence]
+        self, state: AssessmentState, evidence_list: list[Evidence]
     ) -> AssessmentState:
         """Update assessment state with correlation data.
 
@@ -382,7 +372,7 @@ class CorrelationAnalyzer:
             termination=state.termination,
         )
 
-    def get_report_context(self, matrix: CorrelationMatrix) -> Dict[str, Any]:
+    def get_report_context(self, matrix: CorrelationMatrix) -> dict[str, Any]:
         """Generate report context with correlation information.
 
         Args:
@@ -434,11 +424,9 @@ class CorrelationAnalyzer:
 
         return f"{strength} {direction}"
 
-    def _find_correlation_contradictions(
-        self, matrix: CorrelationMatrix
-    ) -> List[Dict[str, Any]]:
+    def _find_correlation_contradictions(self, matrix: CorrelationMatrix) -> list[dict[str, Any]]:
         """Find dimensions with conflicting correlation patterns."""
-        contradictions: List[Dict[str, Any]] = []
+        contradictions: list[dict[str, Any]] = []
 
         # Look for dimensions that have both positive and negative correlations
         for dim in matrix.dimension_ids:
@@ -447,11 +435,19 @@ class CorrelationAnalyzer:
             negative = [c for c in related if c.coefficient < -0.3]
 
             if positive and negative:
-                contradictions.append({
-                    "dimension": dim,
-                    "positive_with": [c.dimension_b if c.dimension_a == dim else c.dimension_a for c in positive],
-                    "negative_with": [c.dimension_b if c.dimension_a == dim else c.dimension_a for c in negative],
-                    "description": f"{dim} shows both positive and negative correlations with other dimensions",
-                })
+                contradictions.append(
+                    {
+                        "dimension": dim,
+                        "positive_with": [
+                            c.dimension_b if c.dimension_a == dim else c.dimension_a
+                            for c in positive
+                        ],
+                        "negative_with": [
+                            c.dimension_b if c.dimension_a == dim else c.dimension_a
+                            for c in negative
+                        ],
+                        "description": f"{dim} shows both positive and negative correlations with other dimensions",
+                    }
+                )
 
         return contradictions

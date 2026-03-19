@@ -1,6 +1,6 @@
-from dataclasses import dataclass
-from typing import List, Literal
 import re
+from dataclasses import dataclass
+from typing import ClassVar, Literal
 
 
 @dataclass
@@ -11,7 +11,7 @@ class DensityAnalysis:
     word_count_category: Literal["short", "medium", "long"]
     specific_example_count: int
     emotional_marker_count: int
-    emotional_markers_found: List[str]
+    emotional_markers_found: list[str]
     density_score: float
 
 
@@ -22,17 +22,17 @@ class FollowUpDecision:
     follow_up_count: int
     density_score: float
     reason: Literal["low_density", "medium_density", "high_density"]
-    suggested_questions: List[str]
+    suggested_questions: list[str]
 
 
 class FollowUpPlanner:
     """Plan follow-up questions based on answer quality."""
 
     # Chinese example markers
-    EXAMPLE_MARKERS = ["比如", "例如", "像", "举例来说", "拿...来说", "就如"]
+    EXAMPLE_MARKERS: ClassVar[list[str]] = ["比如", "例如", "像", "举例来说", "拿...来说", "就如"]
 
     # Chinese emotional markers (程度副词)
-    EMOTIONAL_MARKERS = [
+    EMOTIONAL_MARKERS: ClassVar[list[str]] = [
         "非常",
         "特别",
         "有点",
@@ -55,14 +55,14 @@ class FollowUpPlanner:
     ]
 
     # Question templates for different follow-up types
-    EXAMPLE_QUESTIONS = [
+    EXAMPLE_QUESTIONS: ClassVar[list[str]] = [
         "能否举一个具体的例子？",
         "最近有相关的经历可以分享吗？",
         "能描述一下具体的情况吗？",
         "当时发生了什么具体的事情？",
     ]
 
-    CLARIFICATION_QUESTIONS = [
+    CLARIFICATION_QUESTIONS: ClassVar[list[str]] = [
         "能详细说说你的想法吗？",
         "为什么会有这样的感受？",
         "具体是指哪方面呢？",
@@ -94,13 +94,13 @@ class FollowUpPlanner:
 
         # Word count (for Chinese, count characters; for English, count words)
         # Remove punctuation but keep Chinese characters and alphanumeric
-        cleaned_text = re.sub(r'[^\u4e00-\u9fa5a-zA-Z0-9\s]', '', answer)
+        cleaned_text = re.sub(r"[^\u4e00-\u9fa5a-zA-Z0-9\s]", "", answer)
 
         # Count Chinese characters
-        chinese_chars = len(re.findall(r'[\u4e00-\u9fa5]', cleaned_text))
+        chinese_chars = len(re.findall(r"[\u4e00-\u9fa5]", cleaned_text))
 
         # Count English words (sequences of alphanumeric)
-        english_words = len(re.findall(r'[a-zA-Z0-9]+', cleaned_text))
+        english_words = len(re.findall(r"[a-zA-Z0-9]+", cleaned_text))
 
         # Total word count: Chinese characters + English words
         word_count = chinese_chars + english_words
@@ -209,7 +209,7 @@ class FollowUpPlanner:
             suggested_questions=suggested_questions,
         )
 
-    def generate_follow_up_questions(self, answer: str, count: int) -> List[str]:
+    def generate_follow_up_questions(self, answer: str, count: int) -> list[str]:
         """
         Generate appropriate follow-up questions based on answer quality.
 

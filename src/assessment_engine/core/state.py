@@ -1,5 +1,6 @@
+from typing import Literal, Optional
+
 from pydantic import BaseModel, Field
-from typing import Dict, List, Optional, Literal
 
 
 class DimensionState(BaseModel):
@@ -22,14 +23,14 @@ class NextTarget(BaseModel):
 
 class TerminationStatus(BaseModel):
     eligible: bool = False
-    reasons: List[str] = Field(default_factory=list)
+    reasons: list[str] = Field(default_factory=list)
 
 
 class AssessmentState(BaseModel):
-    dimensions: Dict[str, DimensionState]
+    dimensions: dict[str, DimensionState]
     coverage: Coverage = Field(default_factory=Coverage)
-    evidence_ids: List[str] = Field(default_factory=list)
-    contradiction_ids: List[str] = Field(default_factory=list)
-    open_questions: List[str] = Field(default_factory=list)
+    evidence_ids: list[str] = Field(default_factory=list)
+    contradiction_ids: list[str] = Field(default_factory=list)
+    open_questions: list[str] = Field(default_factory=list)
     recommended_next_target: Optional[NextTarget] = None
     termination: TerminationStatus = Field(default_factory=TerminationStatus)

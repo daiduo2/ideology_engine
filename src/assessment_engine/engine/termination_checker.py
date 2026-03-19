@@ -1,7 +1,8 @@
-from typing import List, Optional
+from typing import Optional
+
+from assessment_engine.core.contradiction import Contradiction
 from assessment_engine.core.protocol import StoppingRules
 from assessment_engine.core.state import AssessmentState, TerminationStatus
-from assessment_engine.core.contradiction import Contradiction
 
 
 class TerminationChecker:
@@ -14,8 +15,8 @@ class TerminationChecker:
         self,
         state: AssessmentState,
         round_index: int,
-        coverage_targets: Optional[List[str]] = None,
-        unresolved_contradictions: Optional[List[Contradiction]] = None,
+        coverage_targets: Optional[list[str]] = None,
+        unresolved_contradictions: Optional[list[Contradiction]] = None,
     ) -> TerminationStatus:
         """Check if termination conditions are met."""
         reasons = []
@@ -52,7 +53,9 @@ class TerminationChecker:
 
         # Check unresolved contradictions
         if unresolved_contradictions:
-            severe = [c for c in unresolved_contradictions if c.severity == "high" and c.needs_followup]
+            severe = [
+                c for c in unresolved_contradictions if c.severity == "high" and c.needs_followup
+            ]
             if severe:
                 eligible = False
                 reasons.append(f"unresolved severe contradictions: {len(severe)}")
@@ -62,7 +65,7 @@ class TerminationChecker:
 
         return TerminationStatus(eligible=eligible, reasons=reasons)
 
-    def _calculate_coverage_ratio(self, state: AssessmentState, targets: List[str]) -> float:
+    def _calculate_coverage_ratio(self, state: AssessmentState, targets: list[str]) -> float:
         """Calculate ratio of covered targets."""
         if not targets:
             return 1.0

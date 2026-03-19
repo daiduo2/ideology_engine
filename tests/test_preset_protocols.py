@@ -11,7 +11,10 @@ class TestPresetProtocols:
     @pytest.fixture
     def protocol_repo(self):
         """Create protocol repository for testing."""
-        return ProtocolRepository(base_path="/Users/daiduo2/claude-code-offline/anthropic-sdk-python/assessment-engine")
+        from pathlib import Path
+        # Use project root relative to test file
+        project_root = Path(__file__).parent.parent
+        return ProtocolRepository(base_path=project_root)
 
     @pytest.fixture
     def preset_protocol_ids(self):

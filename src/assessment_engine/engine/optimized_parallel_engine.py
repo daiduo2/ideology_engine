@@ -5,30 +5,37 @@ Implements:
 - Scheme 3: Pregenerate candidate questions asynchronously
 - Scheme 5: Cache responses for similar inputs
 """
+
 import asyncio
 import hashlib
 import json
 import time
 import uuid
-from typing import Dict, Any, List, Optional, Tuple
-from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
+from datetime import datetime
+from typing import Any, Optional
 
+from assessment_engine.core.contradiction import Contradiction
+from assessment_engine.core.evidence import DimensionMapping, Evidence
 from assessment_engine.core.protocol import AssessmentProtocol
 from assessment_engine.core.session import AssessmentSession
-from assessment_engine.core.state import AssessmentState, DimensionState, Coverage, TerminationStatus
-from assessment_engine.core.evidence import Evidence, DimensionMapping
-from assessment_engine.core.contradiction import Contradiction
+from assessment_engine.core.state import (
+    AssessmentState,
+    Coverage,
+    DimensionState,
+    TerminationStatus,
+)
+from assessment_engine.engine.probe_planner import ProbePlanner
 from assessment_engine.engine.state_updater import StateUpdater
 from assessment_engine.engine.termination_checker import TerminationChecker
-from assessment_engine.engine.probe_planner import ProbePlanner
 
 
 @dataclass
 class CacheEntry:
     """Cache entry with timestamp and TTL."""
-    result: Dict[str, Any]
+
+    result: dict[str, Any]
     timestamp: float
     ttl: float = 300  # 5 minutes default
 
@@ -39,14 +46,15 @@ class CacheEntry:
 @dataclass
 class PregeneratedQuestions:
     """Pregenerated candidate questions for upcoming rounds."""
-    questions: List[Dict[str, Any]] = field(default_factory=list)
+
+    questions: list[dict[str, Any]] = field(default_factory=list)
     generated_at: float = field(default_factory=time.time)
     based_on_round: int = 0
 
     def is_fresh(self, max_age: float = 60) -> bool:
         return time.time() - self.generated_at < max_age
 
-    def get_next(self) -> Optional[Dict[str, Any]]:
+    def get_next(self) -> Optional[dict[str, Any]]:
         if self.questions:
             return self.questions.pop(0)
         return None
@@ -57,7 +65,7 @@ class OptimizedLLMClient:
 
     def __init__(self, base_client):
         self.client = base_client
-        self.cache: Dict[str, CacheEntry] = {}
+        self.cache: dict[str, CacheEntry] = {}
         self.cache_hits = 0
         self.cache_misses = 0
 
@@ -67,19 +75,21 @@ class OptimizedLLMClient:
         content = json.dumps({"method": method, "args": args}, sort_keys=True, ensure_ascii=False)
         return hashlib.md5(content.encode()).hexdigest()
 
-    def _get_from_cache(self, key: str) -> Optional[Dict[str, Any]]:
+    def _get_from_cache(self, key: str) -> Optional[dict[str, Any]]:
         """Get result from cache if valid."""
         if key in self.cache:
             entry = self.cache[key]
             if entry.is_valid():
                 self.cache_hits += 1
-                print(f"    [CACHE] Cache hit! ({self.cache_hits} hits, {self.cache_misses} misses)")
+                print(
+                    f"    [CACHE] Cache hit! ({self.cache_hits} hits, {self.cache_misses} misses)"
+                )
                 return entry.result
             else:
                 del self.cache[key]
         return None
 
-    def _set_cache(self, key: str, result: Dict[str, Any]):
+    def _set_cache(self, key: str, result: dict[str, Any]):
         """Store result in cache."""
         self.cache[key] = CacheEntry(result=result, timestamp=time.time())
         self.cache_misses += 1
@@ -90,7 +100,9 @@ class OptimizedLLMClient:
         self.cache_hits = 0
         self.cache_misses = 0
 
-    def parse_and_extract(self, protocol: Dict[str, Any], state: Dict[str, Any], user_answer: str) -> Dict[str, Any]:
+    def parse_and_extract(
+        self, protocol: dict[str, Any], state: dict[str, Any], user_answer: str
+    ) -> dict[str, Any]:
         """
         Scheme 2: Merge parse_response + extract_evidence into single LLM call.
 
@@ -108,8 +120,8 @@ class OptimizedLLMClient:
             return cached
 
         # Build combined prompt
-        from assessment_engine.llm.prompts.parse_response import SYSTEM_PROMPT as PARSE_PROMPT
         from assessment_engine.llm.prompts.extract_evidence import SYSTEM_PROMPT as EXTRACT_PROMPT
+        from assessment_engine.llm.prompts.parse_response import SYSTEM_PROMPT as PARSE_PROMPT
 
         combined_system_prompt = f"""{PARSE_PROMPT}
 
@@ -154,15 +166,16 @@ IMPORTANT: Return a SINGLE JSON combining both parse results AND extracted evide
         start = time.time()
         result = self.client._call_llm(combined_system_prompt, user_message)
         elapsed = time.time() - start
-        print(f"    [OPTIMIZED] 合并解析+提取耗时: {elapsed:.2f}s (vs 原本 ~{elapsed*2:.2f}s)")
+        print(f"    [OPTIMIZED] 合并解析+提取耗时: {elapsed:.2f}s (vs 原本 ~{elapsed * 2:.2f}s)")
 
         # Cache the result (Scheme 5)
         self._set_cache(cache_key, result)
 
         return result
 
-    def generate_question(self, target: Dict[str, Any], strategy: str,
-                          conversation_history: List[Dict[str, str]]) -> Dict[str, Any]:
+    def generate_question(
+        self, target: dict[str, Any], strategy: str, conversation_history: list[dict[str, str]]
+    ) -> dict[str, Any]:
         """Generate question with caching."""
         # Simple cache based on target
         cache_key = self._get_cache_key("generate_question", target.get("target"), strategy)
@@ -174,23 +187,30 @@ IMPORTANT: Return a SINGLE JSON combining both parse results AND extracted evide
         self._set_cache(cache_key, result)
         return result
 
-    def generate_questions_batch(self, targets: List[Dict[str, Any]],
-                                 conversation_history: List[Dict[str, str]]) -> List[Dict[str, Any]]:
+    def generate_questions_batch(
+        self, targets: list[dict[str, Any]], conversation_history: list[dict[str, str]]
+    ) -> list[dict[str, Any]]:
         """
         Scheme 3: Generate multiple questions in batch for pregeneration.
         """
         results = []
         for target in targets:
             try:
-                result = self.generate_question(target, target.get("recommended_strategy", "ask_recent_example"),
-                                               conversation_history)
+                result = self.generate_question(
+                    target,
+                    target.get("recommended_strategy", "ask_recent_example"),
+                    conversation_history,
+                )
                 results.append(result)
             except Exception as e:
-                print(f"    [PREGEN] Failed to pregenerate question for {target.get('target')}: {e}")
+                print(
+                    f"    [PREGEN] Failed to pregenerate question for {target.get('target')}: {e}"
+                )
         return results
 
-    def generate_report(self, protocol: Dict[str, Any], state: Dict[str, Any],
-                        evidence: List[Dict[str, Any]]) -> Dict[str, Any]:
+    def generate_report(
+        self, protocol: dict[str, Any], state: dict[str, Any], evidence: list[dict[str, Any]]
+    ) -> dict[str, Any]:
         """Generate final report."""
         return self.client.generate_report(protocol, state, evidence)
 
@@ -221,8 +241,8 @@ class OptimizedParallelAssessmentEngine:
         self.executor = ThreadPoolExecutor(max_workers=max_workers)
 
         # Pending evidence processing
-        self._pending_evidence_futures: List[Any] = []
-        self._last_evidence_result: Optional[Dict[str, Any]] = None
+        self._pending_evidence_futures: list[Any] = []
+        self._last_evidence_result: Optional[dict[str, Any]] = None
 
         # Scheme 3: Pregenerated questions
         self._pregenerated: Optional[PregeneratedQuestions] = None
@@ -239,7 +259,7 @@ class OptimizedParallelAssessmentEngine:
             for dim in protocol.dimensions
         }
 
-    def start_session(self, user_context: Optional[Dict[str, Any]] = None) -> AssessmentSession:
+    def start_session(self, user_context: Optional[dict[str, Any]] = None) -> AssessmentSession:
         """Start a new assessment session."""
         session_id = str(uuid.uuid4())
 
@@ -287,14 +307,13 @@ class OptimizedParallelAssessmentEngine:
             targets,
         )
 
-    def _pregenerate_questions_sync(self, targets: List[Dict[str, Any]]) -> PregeneratedQuestions:
+    def _pregenerate_questions_sync(self, targets: list[dict[str, Any]]) -> PregeneratedQuestions:
         """Synchronous pregeneration of questions."""
         print(f"    [PREGEN] 开始预生成 {len(targets)} 个问题...")
         start = time.time()
 
         questions = self.llm_client.generate_questions_batch(
-            targets,
-            self.session.conversation_log if self.session else []
+            targets, self.session.conversation_log if self.session else []
         )
 
         elapsed = time.time() - start
@@ -306,7 +325,7 @@ class OptimizedParallelAssessmentEngine:
             based_on_round=self.session.round_index if self.session else 0,
         )
 
-    async def get_next_question_async(self) -> Dict[str, Any]:
+    async def get_next_question_async(self) -> dict[str, Any]:
         """Get the next question asynchronously."""
         if not self.session:
             raise RuntimeError("No active session. Call start_session() first.")
@@ -341,7 +360,7 @@ class OptimizedParallelAssessmentEngine:
         if self._pregenerated and self._pregenerated.is_fresh():
             pregen_q = self._pregenerated.get_next()
             if pregen_q:
-                print(f"    [PREGEN] 使用预生成的问题 (节省 ~1.5s)")
+                print("    [PREGEN] 使用预生成的问题 (节省 ~1.5s)")
                 question_data = pregen_q
 
         # If no pregenerated question available, generate one
@@ -385,18 +404,20 @@ class OptimizedParallelAssessmentEngine:
             "round_index": self.session.round_index,
         }
 
-    async def submit_answer_async(self, answer: str) -> Dict[str, Any]:
+    async def submit_answer_async(self, answer: str) -> dict[str, Any]:
         """Submit user answer and process it asynchronously."""
         if not self.session:
             raise RuntimeError("No active session. Call start_session() first.")
 
         # Log the answer
-        self.session.conversation_log.append({
-            "role": "user",
-            "content": answer,
-            "round_index": self.session.round_index,
-            "timestamp": datetime.utcnow().isoformat(),
-        })
+        self.session.conversation_log.append(
+            {
+                "role": "user",
+                "content": answer,
+                "round_index": self.session.round_index,
+                "timestamp": datetime.utcnow().isoformat(),
+            }
+        )
 
         # Process with LLM if available
         if self.llm_client:
@@ -425,10 +446,10 @@ class OptimizedParallelAssessmentEngine:
 
         return result
 
-    def _process_evidence_sync(self, answer: str) -> Dict[str, Any]:
+    def _process_evidence_sync(self, answer: str) -> dict[str, Any]:
         """Process evidence synchronously using optimized single-call method."""
         start_time = time.time()
-        print(f"    [DEBUG] 开始后台证据处理 (合并解析+提取)...")
+        print("    [DEBUG] 开始后台证据处理 (合并解析+提取)...")
 
         state = AssessmentState.model_validate(self.session.state)
 
@@ -524,7 +545,7 @@ class OptimizedParallelAssessmentEngine:
             if done:
                 self._last_evidence_result = done.pop().result()
 
-    def _process_without_llm(self, answer: str) -> Dict[str, Any]:
+    def _process_without_llm(self, answer: str) -> dict[str, Any]:
         """Process answer without LLM (placeholder for testing)."""
         state = AssessmentState.model_validate(self.session.state)
 
@@ -546,7 +567,7 @@ class OptimizedParallelAssessmentEngine:
         }
         return defaults.get(target.type, "Tell me more.")
 
-    async def finalize_async(self) -> Dict[str, Any]:
+    async def finalize_async(self) -> dict[str, Any]:
         """Finalize assessment and generate report asynchronously."""
         if not self.session:
             raise RuntimeError("No active session.")
@@ -578,7 +599,7 @@ class OptimizedParallelAssessmentEngine:
             misses = self.llm_client.cache_misses
             total = hits + misses
             if total > 0:
-                print(f"\n📊 缓存统计: {hits}/{total} 命中 ({hits/total*100:.1f}%)")
+                print(f"\n📊 缓存统计: {hits}/{total} 命中 ({hits / total * 100:.1f}%)")
 
         return {
             "session_id": self.session.session_id,
@@ -587,7 +608,7 @@ class OptimizedParallelAssessmentEngine:
             "report": report,
         }
 
-    def _generate_report_sync(self, state: AssessmentState) -> Dict[str, Any]:
+    def _generate_report_sync(self, state: AssessmentState) -> dict[str, Any]:
         """Synchronous wrapper for report generation."""
         return self.llm_client.generate_report(
             protocol=self.protocol.model_dump(),

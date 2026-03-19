@@ -1,10 +1,12 @@
 """API error classes."""
 
+from typing import Optional
+
 
 class APIError(Exception):
     """Base API error."""
 
-    def __init__(self, message: str, code: str = None, status_code: int = 400):
+    def __init__(self, message: str, code: Optional[str] = None, status_code: int = 400):
         self.message = message
         self.code = code or "error"
         self.status_code = status_code

@@ -5,7 +5,8 @@ for different user types and assessment contexts by analyzing historical session
 """
 
 from dataclasses import dataclass, field
-from typing import Dict, List, Tuple, Optional, Any
+from typing import Any, ClassVar, Optional
+
 from assessment_engine.core.session import AssessmentSession
 
 
@@ -58,21 +59,17 @@ class StrategyStats:
         """Merge another StrategyStats into this one."""
         merged = StrategyStats(
             times_used=self.times_used + other.times_used,
-            high_confidence_evidence=self.high_confidence_evidence
-            + other.high_confidence_evidence,
+            high_confidence_evidence=self.high_confidence_evidence + other.high_confidence_evidence,
             total_confidence=self.total_confidence + other.total_confidence,
-            _total_response_length=self._total_response_length
-            + other._total_response_length,
+            _total_response_length=self._total_response_length + other._total_response_length,
             _response_count=self._response_count + other._response_count,
         )
         merged.detailed_responses = self.detailed_responses + other.detailed_responses
         if merged._response_count > 0:
-            merged.avg_response_length = (
-                merged._total_response_length / merged._response_count
-            )
+            merged.avg_response_length = merged._total_response_length / merged._response_count
         return merged
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for serialization."""
         return {
             "times_used": self.times_used,
@@ -83,7 +80,7 @@ class StrategyStats:
         }
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "StrategyStats":
+    def from_dict(cls, data: dict[str, Any]) -> "StrategyStats":
         """Create StrategyStats from dictionary."""
         stats = cls(
             times_used=data.get("times_used", 0),
@@ -102,9 +99,9 @@ class StrategyEffectiveness:
     Tracks effectiveness overall, by user type, and by dimension.
     """
 
-    overall: Dict[str, StrategyStats] = field(default_factory=dict)
-    by_user_type: Dict[str, Dict[str, StrategyStats]] = field(default_factory=dict)
-    by_dimension: Dict[str, Dict[str, StrategyStats]] = field(default_factory=dict)
+    overall: dict[str, StrategyStats] = field(default_factory=dict)
+    by_user_type: dict[str, dict[str, StrategyStats]] = field(default_factory=dict)
+    by_dimension: dict[str, dict[str, StrategyStats]] = field(default_factory=dict)
 
     def get_strategy_score(self, strategy_name: str) -> float:
         """Get effectiveness score for a strategy.
@@ -119,16 +116,12 @@ class StrategyEffectiveness:
             return self.overall[strategy_name].effectiveness
         return 0.0
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for serialization."""
         return {
-            "overall": {
-                name: stats.to_dict() for name, stats in self.overall.items()
-            },
+            "overall": {name: stats.to_dict() for name, stats in self.overall.items()},
             "by_user_type": {
-                user_type: {
-                    name: stats.to_dict() for name, stats in strategies.items()
-                }
+                user_type: {name: stats.to_dict() for name, stats in strategies.items()}
                 for user_type, strategies in self.by_user_type.items()
             },
             "by_dimension": {
@@ -138,31 +131,26 @@ class StrategyEffectiveness:
         }
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "StrategyEffectiveness":
+    def from_dict(cls, data: dict[str, Any]) -> "StrategyEffectiveness":
         """Create StrategyEffectiveness from dictionary."""
         effectiveness = cls()
 
         if "overall" in data:
             effectiveness.overall = {
-                name: StrategyStats.from_dict(stats)
-                for name, stats in data["overall"].items()
+                name: StrategyStats.from_dict(stats) for name, stats in data["overall"].items()
             }
 
         if "by_user_type" in data:
             effectiveness.by_user_type = {
                 user_type: {
-                    name: StrategyStats.from_dict(stats)
-                    for name, stats in strategies.items()
+                    name: StrategyStats.from_dict(stats) for name, stats in strategies.items()
                 }
                 for user_type, strategies in data.get("by_user_type", {}).items()
             }
 
         if "by_dimension" in data:
             effectiveness.by_dimension = {
-                dim: {
-                    name: StrategyStats.from_dict(stats)
-                    for name, stats in strategies.items()
-                }
+                dim: {name: StrategyStats.from_dict(stats) for name, stats in strategies.items()}
                 for dim, strategies in data.get("by_dimension", {}).items()
             }
 
@@ -180,7 +168,7 @@ class StrategyLearner:
         strategies: List of strategy names being tracked
     """
 
-    DEFAULT_STRATEGIES = [
+    DEFAULT_STRATEGIES: ClassVar[list[str]] = [
         "ask_recent_example",
         "ask_clarification",
         "ask_counterexample",
@@ -190,7 +178,7 @@ class StrategyLearner:
     HIGH_CONFIDENCE_THRESHOLD = 0.7
     DETAILED_RESPONSE_THRESHOLD = 20
 
-    def __init__(self, strategies: Optional[List[str]] = None):
+    def __init__(self, strategies: Optional[list[str]] = None):
         """Initialize the strategy learner.
 
         Args:
@@ -203,7 +191,7 @@ class StrategyLearner:
         for strategy in self.strategies:
             self.effectiveness.overall[strategy] = StrategyStats()
 
-    def analyze_session(self, session: AssessmentSession) -> Dict[str, Dict[str, Any]]:
+    def analyze_session(self, session: AssessmentSession) -> dict[str, dict[str, Any]]:
         """Extract strategy effectiveness data from a single session.
 
         Args:
@@ -212,7 +200,7 @@ class StrategyLearner:
         Returns:
             Dictionary mapping strategy names to their stats from this session
         """
-        results: Dict[str, Dict[str, Any]] = {}
+        results: dict[str, dict[str, Any]] = {}
 
         for entry in session.conversation_log:
             strategy = entry.get("strategy")
@@ -267,7 +255,7 @@ class StrategyLearner:
         user_type: Optional[str] = None,
         dimension: Optional[str] = None,
         top_n: Optional[int] = None,
-    ) -> List[Tuple[str, float]]:
+    ) -> list[tuple[str, float]]:
         """Get ranked strategy recommendations for a given context.
 
         Ranks strategies by effectiveness, considering user type and dimension
@@ -281,7 +269,7 @@ class StrategyLearner:
         Returns:
             List of (strategy_name, effectiveness_score) tuples, ranked by score
         """
-        scores: Dict[str, float] = {}
+        scores: dict[str, float] = {}
 
         # Start with overall scores
         for strategy in self.strategies:
@@ -313,7 +301,7 @@ class StrategyLearner:
 
         return ranked
 
-    def update_from_history(self, sessions: List[AssessmentSession]) -> None:
+    def update_from_history(self, sessions: list[AssessmentSession]) -> None:
         """Learn from multiple historical sessions.
 
         Analyzes all sessions and updates effectiveness statistics.
@@ -341,23 +329,19 @@ class StrategyLearner:
                 new_stats.avg_response_length = stats_data["avg_response_length"]
                 new_stats.detailed_responses = stats_data["detailed_responses"]
 
-                self.effectiveness.overall[strategy] = self.effectiveness.overall[
-                    strategy
-                ].merge(new_stats)
+                self.effectiveness.overall[strategy] = self.effectiveness.overall[strategy].merge(
+                    new_stats
+                )
 
                 # Update user type specific stats
                 if user_type:
                     if user_type not in self.effectiveness.by_user_type:
                         self.effectiveness.by_user_type[user_type] = {}
                     if strategy not in self.effectiveness.by_user_type[user_type]:
-                        self.effectiveness.by_user_type[user_type][strategy] = (
-                            StrategyStats()
-                        )
+                        self.effectiveness.by_user_type[user_type][strategy] = StrategyStats()
 
                     self.effectiveness.by_user_type[user_type][strategy] = (
-                        self.effectiveness.by_user_type[user_type][strategy].merge(
-                            new_stats
-                        )
+                        self.effectiveness.by_user_type[user_type][strategy].merge(new_stats)
                     )
 
                 # Update dimension specific stats
@@ -371,13 +355,10 @@ class StrategyLearner:
                             if dim_id:
                                 if dim_id not in self.effectiveness.by_dimension:
                                     self.effectiveness.by_dimension[dim_id] = {}
-                                if (
-                                    strategy
-                                    not in self.effectiveness.by_dimension[dim_id]
-                                ):
-                                    self.effectiveness.by_dimension[dim_id][
-                                        strategy
-                                    ] = StrategyStats()
+                                if strategy not in self.effectiveness.by_dimension[dim_id]:
+                                    self.effectiveness.by_dimension[dim_id][strategy] = (
+                                        StrategyStats()
+                                    )
 
                                 # Create dimension-specific stats
                                 dim_stats = StrategyStats(
@@ -390,12 +371,12 @@ class StrategyLearner:
                                 )
 
                                 self.effectiveness.by_dimension[dim_id][strategy] = (
-                                    self.effectiveness.by_dimension[dim_id][
-                                        strategy
-                                    ].merge(dim_stats)
+                                    self.effectiveness.by_dimension[dim_id][strategy].merge(
+                                        dim_stats
+                                    )
                                 )
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert learner state to dictionary for persistence.
 
         Returns:
@@ -407,7 +388,7 @@ class StrategyLearner:
         }
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "StrategyLearner":
+    def from_dict(cls, data: dict[str, Any]) -> "StrategyLearner":
         """Create StrategyLearner from dictionary.
 
         Args:
@@ -420,9 +401,7 @@ class StrategyLearner:
         learner = cls(strategies=strategies)
 
         if "effectiveness" in data:
-            learner.effectiveness = StrategyEffectiveness.from_dict(
-                data["effectiveness"]
-            )
+            learner.effectiveness = StrategyEffectiveness.from_dict(data["effectiveness"])
         elif "overall" in data:
             # Support flat format for backward compatibility
             learner.effectiveness = StrategyEffectiveness.from_dict(data)

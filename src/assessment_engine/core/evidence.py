@@ -1,5 +1,4 @@
 from pydantic import BaseModel, Field
-from typing import List
 
 
 class DimensionMapping(BaseModel):
@@ -15,5 +14,5 @@ class Evidence(BaseModel):
     source_text: str
     evidence_type: str
     normalized_claim: str
-    mapped_dimensions: List[DimensionMapping]
-    tags: List[str] = Field(default_factory=list)
+    mapped_dimensions: list[DimensionMapping]
+    tags: list[str] = Field(default_factory=list)

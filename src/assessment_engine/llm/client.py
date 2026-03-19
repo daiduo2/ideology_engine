@@ -1,6 +1,7 @@
 import json
 import os
-from typing import Dict, Any, List, Optional
+from typing import Any, Optional
+
 from anthropic import Anthropic
 
 
@@ -16,7 +17,7 @@ class LLMClient:
         system_prompt: str,
         user_message: str,
         temperature: float = 0.3,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Make a structured call to Claude and parse JSON response."""
         message = self.client.messages.create(
             model=self.model,
@@ -45,7 +46,7 @@ class LLMClient:
         protocol_summary: str,
         state_summary: str,
         user_answer: str,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Parse user response into structured observations."""
         from .prompts.parse_response import SYSTEM_PROMPT
 
@@ -60,10 +61,10 @@ User Answer: {user_answer}
 
     def extract_evidence(
         self,
-        protocol: Dict[str, Any],
-        observations: List[Dict[str, Any]],
-        current_state: Dict[str, Any],
-    ) -> Dict[str, Any]:
+        protocol: dict[str, Any],
+        observations: list[dict[str, Any]],
+        current_state: dict[str, Any],
+    ) -> dict[str, Any]:
         """Extract evidence from observations."""
         from .prompts.extract_evidence import SYSTEM_PROMPT
 
@@ -78,10 +79,10 @@ Current State: {json.dumps(current_state, ensure_ascii=False)}
 
     def generate_question(
         self,
-        target: Dict[str, Any],
+        target: dict[str, Any],
         strategy: str,
-        conversation_history: List[Dict[str, str]],
-    ) -> Dict[str, Any]:
+        conversation_history: list[dict[str, str]],
+    ) -> dict[str, Any]:
         """Generate next question based on target."""
         from .prompts.generate_question import SYSTEM_PROMPT
 
@@ -96,10 +97,10 @@ Conversation History: {json.dumps(conversation_history, ensure_ascii=False)}
 
     def generate_report(
         self,
-        protocol: Dict[str, Any],
-        state: Dict[str, Any],
-        evidence: List[Dict[str, Any]],
-    ) -> Dict[str, Any]:
+        protocol: dict[str, Any],
+        state: dict[str, Any],
+        evidence: list[dict[str, Any]],
+    ) -> dict[str, Any]:
         """Generate final report."""
         from .prompts.generate_report import SYSTEM_PROMPT
 
