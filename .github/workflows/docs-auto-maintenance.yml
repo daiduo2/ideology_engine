@@ -76,7 +76,22 @@ jobs:
           CLAUDE_SDK_LOG_PROMPT: ${{ inputs.debug_logs && '1' || '0' }}
           CLAUDE_SDK_HEARTBEAT_SECONDS: ${{ inputs.debug_logs && '10' || '30' }}
           CLAUDE_SDK_IDLE_TIMEOUT_SECONDS: "240"
-        run: timeout 30m uv run python scripts/docs_autofix.py
+        run: |
+          # macOS doesn't have timeout command, use shell approach
+          uv run python scripts/docs_autofix.py &
+          PID=$!
+          # Wait up to 30 minutes
+          for i in $(seq 1 1800); do
+            if ! kill -0 $PID 2>/dev/null; then
+              wait $PID
+              exit $?
+            fi
+            sleep 1
+          done
+          # Timeout reached
+          echo "Error: Script timed out after 30 minutes"
+          kill $PID 2>/dev/null
+          exit 124
 
       - name: Summary
         if: always()
